@@ -9,13 +9,16 @@ import subprocess
 import os
 import time
 import urllib.request
+import logging
 
+
+destinationDirectory = "/media/psksvp/sd32/videos/"
 
 def mainLoop():
     while(True):
-        print("running..")
+        logging.info("running..")
         run()
-        print("sleeping..")
+        logging.info("sleeping..")
         time.sleep(60)
           
 def run():
@@ -23,10 +26,10 @@ def run():
     urlList =  getUrlList(text)
     for url in urlList:
         if False == isInHistory(url):
-            print("getting url " + url)
+            logging.info("getting url " + url)
             download(url)
         else:
-            print("ignoring url " + url)
+            logging.info("ignoring url " + url)
 
 def getMail():
     return urlRequest("https://mail.google.com/mail/feed/atom", 
@@ -48,7 +51,7 @@ def isInHistory(url):
     return False   
     
 def download(url):
-    subprocess.Popen(["youtube-dl", "-o", "/media/psksvp/sd32/videos/%(title)s.%(ext)s", url]).wait()
+    subprocess.Popen(["youtube-dl", "-o", destinationDirectory + "%(title)s.%(ext)s", url]).wait()
     addToHistory(url+"\n")             
 
 ## lazy man parsing
@@ -69,6 +72,7 @@ def readText(fileName):
         text = file.read()
         file.close()
         return text
+    logging.warning("Fail readText from file " + fileName)    
     return ""
 
 def substringList(text, startMarker, endMarker):
@@ -96,10 +100,12 @@ def urlRequest(url, user="", password=""):
             urllib.request.install_opener(opener) 
             return urllib.request.urlopen(url).read().decode('utf-8') 
     except:
+        logging.warning("Fail urlRequest with URL " + url)
         return ""      
     
     
 if __name__ == "__main__":
+    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
     mainLoop()       
    
 
