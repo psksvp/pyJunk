@@ -56,10 +56,12 @@ def download(url):
 
 ## lazy man parsing
 def getUrlList(text):
-    a = substringList(text, "https://you", " ")   
-    b = substringList(text, "https://www.you", " ") 
-    c = substringList(text, "http://www.you", " ")
-    return a + b + c
+    a = substringList(text, "https://", " ")
+    b = substringList(text, "http://", " ")
+    #a = substringList(text, "https://you", " ")   
+    #b = substringList(text, "https://www.you", " ") 
+    #c = substringList(text, "http://www.you", " ")
+    return a + b
 
 
 
