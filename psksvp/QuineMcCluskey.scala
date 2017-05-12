@@ -14,16 +14,16 @@ object QuineMcCluskey
     * @param x
     * @return
     */
-  def bitCount(x: Int): Int =
-  {
-    @tailrec
-    def bcrec(accum: Int, n: Int): Int = n match
-    {
-      case 0 => accum
-      case x => bcrec(accum + (x % 2),(x>>>1))
-    }
-    bcrec(0, x)
-  }
+  def bitCount(x: Int): Int = Integer.bitCount(x)
+//  {
+//    @tailrec
+//    def bcrec(accum: Int, n: Int): Int = n match
+//    {
+//      case 0 => accum
+//      case x => bcrec(accum + (x % 2),(x>>>1))
+//    }
+//    bcrec(0, x)
+//  }
 
   /**
     *

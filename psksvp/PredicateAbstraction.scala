@@ -1,17 +1,19 @@
 package psksvp
 
 import au.edu.mq.comp.skink.ir.IRFunction
+import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
 import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax.Term
 import au.edu.mq.comp.smtlib.theories.BoolTerm
 import au.edu.mq.comp.smtlib.typedterms.TypedTerm
-import au.edu.mq.comp.smtlib.solvers.Z3
 import au.edu.mq.comp.automat.auto.NFA
 import au.edu.mq.comp.automat.edge.Implicits._
 import au.edu.mq.comp.skink.ir.Trace
 
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 import logics._
 import psksvp.resources.using
+import au.edu.mq.comp.smtlib.typedterms.Commands
+import au.edu.mq.comp.smtlib.interpreters.Resources
 //object resources extends Resources
 
 /**
@@ -20,6 +22,7 @@ import psksvp.resources.using
 case class PredicateAbstraction(function:IRFunction,
                                 choices:Seq[Int],
                                 predicateList:Seq[TypedTerm[BoolTerm, Term]])
+                                (implicit solver:SMTLIBInterpreter) extends Commands with Resources
 {
   lazy private val trace = Trace(choices)
   lazy private val combinationSize = Math.pow(2, predicateList.length).toInt
@@ -28,7 +31,7 @@ case class PredicateAbstraction(function:IRFunction,
   def automaton:NFA[Int, Int] =
   {
     val tracePredicates = generatePredicates
-    val lastLocPredicateIsFalse = isEquivalence(False(), tracePredicates.last)
+    val lastLocPredicateIsFalse = equivalence(False(), tracePredicates.last)
     println("last loc eq to false? >>>" + (if(lastLocPredicateIsFalse) "yes" else "no"))
 
     val linear = PredicateAbstraction.automatonFromTrace(choices)
@@ -59,8 +62,8 @@ case class PredicateAbstraction(function:IRFunction,
     def isFixedPoint(previous:Seq[BooleanTerm], next:Seq[BooleanTerm]): Boolean =
     {
       require(previous.length == next.length)
-      val v = for(i <- previous.indices) yield isEquivalence(previous(i), next(i))
-      v.reduce(_ & _)
+      val v = for(i <- previous.indices) yield equivalence(previous(i), next(i))
+      v.reduce(_ && _)
     }
 
     ////////////-----------
@@ -101,7 +104,7 @@ case class PredicateAbstraction(function:IRFunction,
     {
       val newTermOfThisLoc = nextPredicatesOfLocation(i, initPredicatesOfLoc)
       //println("checking for true -> " + isEquivalence(True(), newTermOfThisLoc))
-      if(isEquivalence(newTermOfThisLoc, initPredicatesOfLoc(i)))
+      if(equivalence(newTermOfThisLoc, initPredicatesOfLoc(i)))
         nextLocPredicate(i) = newTermOfThisLoc
       else
         nextLocPredicate(i) = newTermOfThisLoc | initPredicatesOfLoc(i)
@@ -121,12 +124,13 @@ case class PredicateAbstraction(function:IRFunction,
   def nextPredicatesOfLocation(loc:Int, currentPredicates:Seq[BooleanTerm]):BooleanTerm =
   {
     import psksvp.PredicateAbstraction.gamma
-    val absDomains = for(transition <- transitionMap(loc)) yield
-                     {
-                       abstractPostOfBlock(transition.source,
+
+   val absDomains = for (transition <- transitionMap(loc)) yield
+                    {
+                      abstractPostOfBlock(transition.source,
                                            transition.choice,
                                            withPrecondition = currentPredicates(transition.preconditionIndex))
-                     }
+                    }
 
     val terms = absDomains.map(gamma(_, predicateList, simplify = true)).reduce(_ | _)
     terms
@@ -138,20 +142,12 @@ case class PredicateAbstraction(function:IRFunction,
     * @param withPrecondition
     * @return
     */
-  def abstractPostOfBlock(blockNumber: Int,
+  def abstractPostOfBlock(blockNumber:Int,
                           exitChoice:Int,
                           withPrecondition: BooleanTerm):AbstractDomain =
   {
-    /// hard code to test something
-//    println("******* HARD CODE ***********")
-//    if(0 == blockNumber)
-//      List[AbstractDomain]()
-    ////////
-
     val combinations = List.range(0, combinationSize)
     val absDomain = combinations.map(checkCombination(_, blockNumber, exitChoice, withPrecondition))
-//    val selectedVec = absDomain.map(_ >= 0)
-//    (absDomain.filter( _ >= 0), selectedVec)
     absDomain.filter( _ >= 0)
   }
 
@@ -167,26 +163,22 @@ case class PredicateAbstraction(function:IRFunction,
                        exitChoice:Int,
                        precondition:BooleanTerm):Int=
   {
-    import resources.using
     import psksvp.PredicateAbstraction._
-
-    val postcondition = combinationToExpression(combination, predicateList)
-    using(new Z3)
-    {
-      implicit solver => function.checkPost(precondition,
-                                            trace,
-                                            blockNumber,
-                                            exitChoice,
-                                            postcondition)
-    }
-    match
-    {
-      case Success(v) => if (v) combination else -1
-      case Failure(e) => sys.error(s"PredicateAbstraction.abstractBlock($blockNumber):" +
-                                   s"Failure($e) from checkPost where the combination index is $combination")
-    }
+    val postcondition = combinationToDisjunctTerm(combination, predicateList)
+    push()
+    val result = function.checkPost(precondition,
+                                    trace,
+                                    blockNumber,
+                                    exitChoice,
+                                    postcondition) match
+                  {
+                    case Success(v) => if (v) combination else -1
+                    case Failure(e) => sys.error(s"PredicateAbstraction.abstractBlock($blockNumber):" +
+                      s"Failure($e) from checkPost where the combination index is $combination")
+                  }
+    pop()
+    result
   }
-
 }
 
 
@@ -197,6 +189,13 @@ case class PredicateAbstraction(function:IRFunction,
   */
 object PredicateAbstraction
 {
+  // for testing purpose
+  private var usePredicates:Seq[BooleanTerm] = Nil
+  def setToUsePredicates(pl:Seq[BooleanTerm]):Unit=
+  {
+    usePredicates = pl
+  }
+
   /**
     *
     * @param function
@@ -278,7 +277,8 @@ object PredicateAbstraction
     * @return
     */
   def generateAutomaton(function: IRFunction,
-                        choices: Seq[Int]): NFA[Int, Int] =
+                        choices: Seq[Int],
+                        iteration:Int): NFA[Int, Int] =
   {
     if(repetitionsPairs(function, choices).isEmpty)
     {
@@ -288,34 +288,16 @@ object PredicateAbstraction
     }
     else
     {
-      import au.edu.mq.comp.smtlib.theories.{Core, IntegerArithmetics}
-      object logics extends IntegerArithmetics
-      import logics._
+      using[NFA[Int, Int]](new SMTLIBInterpreter(solverFromName("Z3")))
+      {
+        implicit solver => Success(PredicateAbstraction(function, choices, usePredicates).automaton)
+      }
+      match
+      {
+        case Success(a) => a
+        case _          => sys.error("hdsajdaskdjh")
+      }
 
-      val i = Ints("%i")
-      val iPromoted = Ints("%i.promoted")
-      val zero = Ints("%0")
-      val one = Ints("%1")
-      val add = Ints("%add")
-      val cmp = Bools("%cmp")
-      val cmp1 = Bools("%cmp1")
-      val three = Ints("%3")
-      val iToBool = Bools("%tobool.i")
-      val addlcssa = Ints("%add.lcssa")
-      val conv = Ints("%conv")
-      val condAddrI = Ints("%cond.addr.i")
-
-      val predList2:List[BooleanTerm] = List(add > 0, add <= 10, add === 10)
-
-
-      //-v -f LLVM /Users/psksvp/Workspace/test2.ll
-//      val predList:List[BooleanTerm] = List(//zero >= 0, zero < 100,
-//                                             add > 0,
-//                                             add < 100, //loop guard,
-//                                             add === 100) // assert cond
-//                                             //cmp)//, cmp1)
-
-      PredicateAbstraction(function, choices, predList2).automaton
     }
   }
 
@@ -338,40 +320,20 @@ object PredicateAbstraction
     //println(s"Annotations: ${preds.map(_.termDef).map(showTerm(_))}")
 
     val completeItp = preds //True() +: preds :+ False()
-
-    //  Collect partition of indices according to block equivalence
-    val indexPartition: Seq[Seq[Int]] = function.traceToRepetitions(Trace(choices))
-    println(s"Partitions $indexPartition")
-    println(s"Non-singleton partitions ${indexPartition.filter(_.size > 1)}")
-
-    //  Compute candidate backEdges from the indexPartition
-    //  for each partition with more than 2 elements, build the candidate min, max
-    val candidatePairs = indexPartition.filter(_.size > 1).map(_.toList).map(generatePairs(_)).flatten.flatten
-
+    val candidatePairs = repetitionsPairs(function, choices)
     println(s"candidate pairs $candidatePairs")
-
-    /**
-      * Check if backedges can be added to the linear automaton
-      * If there is a repetition of a block at index i and j, we
-      * can try to add a backedge j -- choices(i) -> i + 1
-      * For each set of repeated blocks, we try to add the first and closest
-      * backedge. For instance if the a set is {1,4,7} (same block at index 1,4,7)
-      * we try to add a backedge from 4 to 2 with choices(1)
-      */
-
     val newBackEdges =
       for (
         (i, j) <- candidatePairs;
         x1 = completeItp(j).unIndexed;
         x2 = completeItp(i + 1).unIndexed;
-        res = using(new Z3) {
-          implicit solver =>  function.checkPost(
-                                                  x1,
+        res = using(new SMTLIBInterpreter(solverFromName("Z3")))
+        {
+          implicit solver =>  function.checkPost( x1,
                                                   Trace(choices),
                                                   index = j,
                                                   choice = choices(i),
-                                                  x2
-                                                )
+                                                  x2)
         };
         uu = {
           println(s"Result of checkPost $res")
@@ -392,7 +354,7 @@ object PredicateAbstraction
 
 
   /**
-    * combine boolean vectors (disjunct clauses) to a conjunct clause
+    * combine boolean vectors (disjunct clauses) to a conjunct
     *
     * @param absDomain
     * @return BooleanExpression
@@ -402,110 +364,72 @@ object PredicateAbstraction
             simplify: Boolean): BooleanTerm =
   {
     if (absDomain.size == math.pow(2, predicates.length).toInt)
-      False()  // short cut
+      False()  // short cut   // this may be incorrect for CNF
     else if(absDomain.isEmpty)
-      True()   // short cut
+      True()   // short cut  // this may be incorrect for CNF experiment.
     else
     {
-      if (!simplify)
+      if(!simplify)
       {
-        val exprLs = for (i <- absDomain.indices) yield combinationToExpression(absDomain(i), predicates)
+        val exprLs = for (i <- absDomain.indices) yield combinationToDisjunctTerm(absDomain(i), predicates)
         exprLs.reduce(_ & _)
       }
       else
-        simplifyAbstractDomain(absDomain, predicates)
+      {
+        val minTerms = booleanMinimize(absDomain.toList, predicates.toList)
+        val terms = toCNF(minTerms)
+        terms
+      }
     }
   }
 
-  /**
-    *
-    * @param absDomain
-    * @return
-    */
-  def simplifyAbstractDomain(absDomain: AbstractDomain,
-                             predicates:Seq[BooleanTerm]): BooleanTerm =
-  {
-    if (absDomain.size == math.pow(2, predicates.length).toInt)
-      False()
-    else if(absDomain.isEmpty)
-      True()   // short cut
-    else
-    {
-      val minTerms = booleanMinimize(absDomain.toList, predicates.toList)
-      CNF(minTerms)
-    }
-  }
 
-  def combinationToExpression(combination:Int, predicates:Seq[BooleanTerm]):BooleanTerm=
+  def combinationToDisjunctTerm(combination:Int, predicates:Seq[BooleanTerm]):BooleanTerm=
   {
-    val binStr = binaryString(combination, predicates.length)
-    binaryStringToExpression(binStr, predicates)
-  }
-
-
-  /**
-    *
-    * @param bin
-    * @param predicates
-    * @return
-    */
-  def binaryStringToExpression(bin:String, predicates:Seq[BooleanTerm]): BooleanTerm =
-  {
-    require(bin.length == predicates.length)
+    val bin = binaryString(combination, predicates.length)
     val exprLs = for (i <- bin.indices) yield if (bin(i) == '1') predicates(i) else !predicates(i)
     exprLs.reduce(_ | _)
   }
 
+  def combinationToConjunctTerm(combination:Int, predicates:Seq[BooleanTerm]):BooleanTerm=
+  {
+    val bin = binaryString(combination, predicates.length)
+    val exprLs = for (i <- bin.indices) yield if (bin(i) == '1') predicates(i) else !predicates(i)
+    exprLs.reduce(_ & _)
+  }
+
+
 
   /**
     *
-    * @param n
-    * @param bits
+    * @param precondition
+    * @param expression
+    * @param predicates
     * @return
     */
-  def binaryString(n:Int, bits:Int):String=
-  {
-    require(n >= 0, s"psksvp.binaryString($n, $bits) n (1st args) must be >= 0")
-    require(n <= Integer.parseInt("1" * bits, 2), s"psksvp.binaryString($n, $bits) $bits bits is too small for $n ")
-    val format = "%" + bits + "s"
-    // make sure we have all the leading zeros
-    String.format(format, Integer.toBinaryString(n)).replace(" ", "0")
-  }
-
-    /**
-      *
-      * @param precondition
-      * @param expression
-      * @param predicates
-      * @return
-      */
   def abstractPostOf(expression:BooleanTerm,
                      precondition:BooleanTerm,
                      predicates:List[BooleanTerm]):BooleanTerm =
   {
-    import au.edu.mq.comp.smtlib.solvers._
-
-
     val combinationSize = Math.pow(2, predicates.length).toInt  // can have overflow problem, very unlikely, only 32 bits number of predicates
     val domain = for(i <- 0 until combinationSize) yield        // .par possible?? don't know, function.checkPost may not thread safe?
-                 {
-                    val post = combinationToExpression(i, predicates)
-                    using(new Z3)
-                    {
-                      implicit solver => psksvp.checkPost(precondition,
-                                                           expression,
-                                                           post)
-                    }
-                    match
-                    {
-                      case Success(v) => if(v) i else -1
-                      case Failure(e) => sys.error(s"PredicateAbstraction.abstractExpression" +
-                                                     s"Failure($e) from checkPost where the combination index is $i")
-                    }
-                 }
+    {
+      val post = combinationToDisjunctTerm(i, predicates)
+      psksvp.checkPost(precondition, expression, post) match
+      {
+        case Success(v) => if(v) i else -1
+        case Failure(e) => sys.error(s"PredicateAbstraction.abstractExpression" +
+                                     s"Failure($e) from checkPost where the combination index is $i")
+      }
+    }
     println(s"valid combination is $domain")
-    gamma(domain.filter(_ != -1), predicates,  simplify = false)
+    gamma(domain.filter(_ != -1), predicates,  simplify = true)
   }
+}
+
+
+/*
+
 
 
   def checkForFalseCombination(predicateList:Seq[BooleanTerm]):Unit=
@@ -517,107 +441,10 @@ object PredicateAbstraction
 
     for(exp <- combiExps)
     {
-      println(isEquivalence(True(), exp)+" ---> " + termAsInfix(exp))
+      println(equivalence(True(), exp)+" ---> " + termAsInfix(exp))
     }
   }
-
-
-
-
-  /**
-    *
-    * @param args
-    */
-  def main(args:Array[String]):Unit=
-  {
-    val x0 = Ints("x0")
-    val x1 = Ints("x1")
-    val x2 = Ints("x2")
-    val x3 = Ints("x3")
-
-    val p1:List[BooleanTerm] = List(x0 === 0, x1 >= 1)
-    val p2:List[BooleanTerm] = List(x0 === 0, x1 >= 1, x2 >= 1)
-    val p3:List[BooleanTerm] = List(x0 === 0, x1 >= 1, x2 >= 1, x1 <= 0, x3 >= 1, x1 >= 2, x2 >= 3,
-                                              x1 <= 5, x3 >= 6, x1 >= 7, x2 >= 7, x1 <= 20, x3 >= 1001)
-
-    {
-      val a1 = abstractPostOf(x1 === x0 + 1, precondition = True(), p1)
-      val a2 = abstractPostOf(x1 === x0 + 1, precondition = True(), p2)
-      println(termAsInfix(a1))
-      println(termAsInfix(a2))
-      println(isEquivalence(a1, a2))
-    }
-
-    {
-      println("---------------------------------------------")
-      val a1 = abstractPostOf(x1 === x0 + 1, precondition = x0 === 0, p1)
-      val a2 = abstractPostOf(x1 === x0 + 1, precondition = x0 === 0, p2)
-      println(termAsInfix(a1))
-      println(termAsInfix(a2))
-      println(isEquivalence(a1, a2))
-    }
-
-    {
-      println("---------------------------------------------")
-      val a1 = abstractPostOf(x1 === x0 + 1, precondition = x0 === 0, p1)
-      val a2 = abstractPostOf(x1 === x0 + 1, precondition = x0 === 0, p2)
-      println("going to abs with 13 predicates")
-      val a3 = abstractPostOf(x1 === x0 + 1, precondition = x0 === 0, p3)
-      println(termAsInfix(a1))
-      println(termAsInfix(a2))
-      println(termAsInfix(a3))
-      println(isEquivalence(a1, a2))
-      println(isEquivalence(a3, a2))
-    }
-
-    {
-      println("---------------------------------------------")
-      val a1 = abstractPostOf(x1 === x0 + 1, precondition = True(), p1)
-      val a2 = abstractPostOf(x1 === x0 + 1, precondition = True(), p2)
-      val a3 = abstractPostOf(x1 === x0 + 1, precondition = True(), p3)
-      println(termAsInfix(a1))
-      println(termAsInfix(a2))
-      println(termAsInfix(a3))
-      println(isEquivalence(a1, a2))
-      println(isEquivalence(a3, a2))
-    }
-
-    {
-      println("---------------------------------------------")
-      val a1 = abstractPostOf(True(), precondition = True(), p1)
-      val a2 = abstractPostOf(True(), precondition = True(), p2)
-      val a3 = abstractPostOf(True(), precondition = True(), p3)
-      println(termAsInfix(a1))
-      println(termAsInfix(a2))
-      println(termAsInfix(a3))
-      println(isEquivalence(a1, a2))
-      println(isEquivalence(a3, a2))
-    }
-
-
-
-
-//    val p0 = Bools("p0")
-//    println(isEquivalence(p0 & !p0, False()))
-//
-//    val b = Bools("b")
-//    val c = Bools("c")
-//    val a = Bools("a")
-//    val d = Bools("d")
-//
-//    println(isEquivalence(c | !(b & c),                                   True()))
-//    println(isEquivalence(!(a & b) & (!a | b) & (!b | b),                 !a))
-//    println(isEquivalence((a | c) & ( (a & d) | (a & !d)) | (a & c) | c,  a | c))
-//    println(isEquivalence( !a & (a | b) | (b | (a & a)) & (a | !b),       a | b))
-//
-//    println(isEquivalence(False() | False(),                              False()))
-//    println(isEquivalence(False() | True(),                               True() & True()))
-
-  }
-}
-
-
-
+ */
 
 
 

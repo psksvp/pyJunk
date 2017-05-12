@@ -1,4 +1,5 @@
-
+import au.edu.mq.comp.smtlib.configurations.SolverConfig
+import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
 
 /**
   * Created by psksvp on 14/2/17.
@@ -16,7 +17,6 @@ package object psksvp
   import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax.{SatResponses, UnSat}
   import au.edu.mq.comp.smtlib.typedterms.Commands
   import au.edu.mq.comp.smtlib.interpreters.Resources
-  import au.edu.mq.comp.smtlib.solvers._
   object resources extends Resources
   import resources._
   object Cmds extends Commands
@@ -27,32 +27,23 @@ package object psksvp
   type BooleanTerm = TypedTerm[BoolTerm, Term]
   type AbstractDomain = Seq[Int]
 
-  var debug = false
-
-  def debugEnable(enable:Boolean):Unit=
-  {
-    debug = enable
-  }
-
-  def isDebugging = debug
 
   /**
     *
     * @param term
     * @return
     */
-  def satisfiableCheck(term : BooleanTerm) : SatResponses =
+  def satisfiableCheck(term : BooleanTerm)
+                      (implicit solver:SMTLIBInterpreter):SatResponses =
   {
-    val result = using(new Z3)
-    {
-      implicit solver => isSat(term)
-    }
-
-    result match
-    {
-      case Success(s) => s
-      case _          => sys.error(s"psksvp.satisfiableCheck of terms $term solver returns fail")
-    }
+    push()
+    val result = isSat(term) match
+                 {
+                   case Success(s) => s
+                   case _          => sys.error(s"psksvp.satisfiableCheck of terms $term solver returns fail")
+                 }
+    pop()
+    result
   }
 
   /**
@@ -60,7 +51,8 @@ package object psksvp
     * @param term
     * @return
     */
-  def isValid(term : BooleanTerm) : Boolean = UnSat() == satisfiableCheck(!term)
+  def validityCheck(term : BooleanTerm)
+                   (implicit solver:SMTLIBInterpreter):Boolean = UnSat() == satisfiableCheck(!term)
 
 
   /***
@@ -69,7 +61,8 @@ package object psksvp
     * @param f2
     * @return
     */
-  def isEquivalence(f1:BooleanTerm, f2:BooleanTerm): Boolean = isValid(f1 === f2)
+  def equivalence(f1:BooleanTerm, f2:BooleanTerm)
+                  (implicit solver:SMTLIBInterpreter):Boolean = validityCheck(f1 === f2)
 
 
   /**
@@ -83,7 +76,7 @@ package object psksvp
                 e:BooleanTerm,
                 q:BooleanTerm):Try[Boolean]=
   {
-    val result = using(new Z3)
+    val result = using(new SMTLIBInterpreter(solverFromName("Z3")))
     {
       implicit solver => isSat(p & e & !q) match
       {
@@ -184,11 +177,28 @@ package object psksvp
     * @param s
     * @return
     */
-  def CNF(s:List[List[BooleanTerm]]):BooleanTerm = s match
+  def toCNF(s:List[List[BooleanTerm]]):BooleanTerm = s match
   {
     case Nil       => sys.error("psksvp.CNF, Nil list was passed")
     case l :: Nil  => l.reduce(_ | _)
-    case l :: rest => l.reduce(_ | _) & CNF(rest)  // conjunt them
+    case l :: rest => l.reduce(_ | _) & toCNF(rest)  // conjunt them
+  }
+
+//  def toCNF(s:List[List[BooleanTerm]]):BooleanTerm =
+//  {
+//    s.reduce(_.reduce(_ | _) & _.reduce(_ | _))
+//  }
+//
+//  def toDNF(s:List[List[BooleanTerm]]):BooleanTerm =
+//  {
+//    s.reduce(_.reduce(_ & _) | _.reduce(_ & _))
+//  }
+
+  def toDNF(s:List[List[BooleanTerm]]):BooleanTerm = s match
+  {
+    case Nil       => sys.error("psksvp.CNF, Nil list was passed")
+    case l :: Nil  => l.reduce(_ & _)
+    case l :: rest => l.reduce(_ & _) | toDNF(rest)  // conjunt them
   }
 
 
@@ -201,5 +211,29 @@ package object psksvp
   {
     case l if (l.size < 2) => Nil
     case a :: xa => xa.map((a, _)) :: generatePairs(xa)
+  }
+
+  /**
+    *
+    * @param n
+    * @param bits
+    * @return
+    */
+  def binaryString(n:Int, bits:Int):String=
+  {
+    require(n >= 0, s"psksvp.binaryString($n, $bits) n (1st args) must be >= 0")
+    require(n <= Integer.parseInt("1" * bits, 2), s"psksvp.binaryString($n, $bits) $bits bits is too small for $n ")
+    val format = "%" + bits + "s"
+    // make sure we have all the leading zeros
+    String.format(format, Integer.toBinaryString(n)).replace(" ", "0")
+  }
+
+  def solverFromName(name : String) : SolverConfig =
+  {
+    au.edu.mq.comp.smtlib.configurations.AppConfig.config.find(_.name == name) match
+    {
+      case Some(sc) => sc
+      case None     => sys.error(s"TraceRefinement: can't find solver called $name in config file")
+    }
   }
 }
