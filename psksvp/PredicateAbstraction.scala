@@ -93,21 +93,21 @@ case class PredicateAbstraction(function:IRFunction,
 
   /**
     *
-    * @param initPredicatesOfLoc
+    * @param currentPredicatesOfLoc
     * @return
     */
-  def generateLocationPredicates(initPredicatesOfLoc:Seq[BooleanTerm]):Seq[BooleanTerm] =
+  def generateLocationPredicates(currentPredicatesOfLoc:Seq[BooleanTerm]):Seq[BooleanTerm] =
   {
-    val nextLocPredicate = Array.fill[BooleanTerm](initPredicatesOfLoc.length)(True())
+    val nextLocPredicate = Array.fill[BooleanTerm](currentPredicatesOfLoc.length)(True())
 
-    for(i <- 1 until initPredicatesOfLoc.length)
+    for(i <- 1 until currentPredicatesOfLoc.length)
     {
-      val newTermOfThisLoc = nextPredicatesOfLocation(i, initPredicatesOfLoc)
+      val newTermOfThisLoc = nextPredicatesOfLocation(i, currentPredicatesOfLoc)
       //println("checking for true -> " + isEquivalence(True(), newTermOfThisLoc))
-      if(equivalence(newTermOfThisLoc, initPredicatesOfLoc(i)))
+      if(equivalence(newTermOfThisLoc, currentPredicatesOfLoc(i)))
         nextLocPredicate(i) = newTermOfThisLoc
       else
-        nextLocPredicate(i) = newTermOfThisLoc | initPredicatesOfLoc(i)
+        nextLocPredicate(i) = newTermOfThisLoc | currentPredicatesOfLoc(i)
       print(".")
     }
     println()

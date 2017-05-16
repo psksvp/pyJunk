@@ -6,7 +6,7 @@ import psksvp.PredicateAbstraction.abstractPostOf
 import logics._
 
 
-object runVerify
+object runSkink
 {
   def apply(filename:String,
             predicates:Seq[BooleanTerm],
@@ -57,7 +57,7 @@ object test
       |}
     """.stripMargin
 
-    runVerify(toFile(code),
+    runSkink(toFile(code),
                List(i >= 1, i <= 1000, i === 1001),
                useO2 = false,
                usePredicateAbstraction = true,
@@ -85,7 +85,7 @@ object test
                   |}
                 """.stripMargin
 
-    runVerify(toFile(code),
+    runSkink(toFile(code),
                List(a === 0, a > 0),
                useO2 = false,
                usePredicateAbstraction = true,
@@ -96,8 +96,6 @@ object test
   {
     val i = Ints("%i")
     val a = Ints("%a")
-    val one = Ints("%1")
-    val two = Ints("%2")
 
     val code =  """
                   |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
@@ -109,8 +107,8 @@ object test
                   |  while(i < 1000)
                   |  {
                   |    if(i != a) __VERIFIER_error();
-                  |    a = a + 1;
                   |    i = i + 1;
+                  |    a = i;  //a = a + 1;
                   |  }
                   |  if(i != 1000)  __VERIFIER_error();
                   |  if(a != 1000)  __VERIFIER_error();
@@ -118,8 +116,8 @@ object test
                   |}
                 """.stripMargin
 
-    runVerify(toFile(code),
-               List(a == i, i >= 0, i < 1000, i === 1000, one === two),
+    runSkink(toFile(code),
+               List(/*i >= 0,*/ i < 1000, i === 1000, /*a >= 0, a < 1000,*/ a === 1000, a === i),
                useO2 = false,
                usePredicateAbstraction = true,
                useClang = "clang-3.7")
@@ -150,7 +148,7 @@ object test
                   |}
                 """.stripMargin
 
-    runVerify(toFile(code),
+    runSkink(toFile(code),
                List(x >= 0, y >= 0, x === 2000, x < 2000),
                useO2 = false,
                usePredicateAbstraction = true,
@@ -182,7 +180,7 @@ object test
                   |}
                 """.stripMargin
 
-    runVerify(toFile(code),
+    runSkink(toFile(code),
                List(x >= 0, y >= 0, x === 2000, x < 2000),
                useO2 = false,
                usePredicateAbstraction = true,
