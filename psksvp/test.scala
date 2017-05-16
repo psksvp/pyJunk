@@ -1,5 +1,7 @@
 package psksvp
 
+
+
 import psksvp.PredicateAbstraction.abstractPostOf
 import logics._
 
@@ -9,25 +11,20 @@ object runVerify
   def apply(filename:String,
             predicates:Seq[BooleanTerm],
             useO2:Boolean,
-            useClang:String = "clang-4.0"):Unit=
+            usePredicateAbstraction:Boolean = true,
+            useClang:String = "clang-4.0",
+            maxIteration:Int = 10):Unit=
   {
     import au.edu.mq.comp.skink.Main
     PredicateAbstraction.setToUsePredicates(predicates)
-    if(useO2)
-    {
-      Main.main(Array("-v",
-                       "--use-predicate-abstraction",
-                       "--use-clang", useClang,
-                       filename))
-    }
-    else
-    {
-      Main.main(Array("-v",
-                       "--use-predicate-abstraction",
-                       "--use-clang", useClang,
-                       "--no-O2",
-                       filename))
-    }
+    val args = List("-v",
+                    if(usePredicateAbstraction) "--use-predicate-abstraction" else "",
+                    if(useO2) "" else "--no-O2",
+                     "--use-clang", useClang,
+                     "-m", maxIteration.toString,
+                    filename)
+
+     Main.main(args.filter(_.length > 0).toArray)
   }
 }
 
@@ -39,23 +36,170 @@ object test
 {
   def main(args:Array[String]):Unit=
   {
-    testForLoopSum()
+    test3()
   }
 
-  def testForLoopSum(): Unit =
+  def test1(): Unit =
   {
     val i = Ints("%i")
     val a = Ints("%a")
 
-    runVerify("/Users/psksvp/MyCode/skink/testing.psksvp/test_for_loop_sum.c",
-               List(i >= 1, i <= 1000, i === 1001),//, a >= 0, a <= 1000, a === i - 1),
+    val code =  """
+      |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+      |
+      |int main(int argc, char** arg)
+      |{
+      |  int i;
+      |  for(i = 1; i <= 1000; i++);
+      |
+      |  if(i != 1001) __VERIFIER_error();
+      |  return 0;
+      |}
+    """.stripMargin
+
+    runVerify(toFile(code),
+               List(i >= 1, i <= 1000, i === 1001),
                useO2 = false,
+               usePredicateAbstraction = true,
                useClang = "clang-3.7")
   }
 
-  def writeToTemp(code:String):String=
+  def test2(): Unit =
   {
+    val i = Ints("%i")
+    val a = Ints("%a")
+
+    val code =  """
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |
+                  |int main(int argc, char** arg)
+                  |{
+                  |  int a = 0;
+                  |  int i;
+                  |  for(i = 1; i <= 1000; i++)
+                  |  {
+                  |    a = a + 1;
+                  |  }
+                  |  if(a == 0) __VERIFIER_error();
+                  |  return 0;
+                  |}
+                """.stripMargin
+
+    runVerify(toFile(code),
+               List(a === 0, a > 0),
+               useO2 = false,
+               usePredicateAbstraction = true,
+               useClang = "clang-3.7")
+  }
+
+  def test3(): Unit =
+  {
+    val i = Ints("%i")
+    val a = Ints("%a")
+    val one = Ints("%1")
+    val two = Ints("%2")
+
+    val code =  """
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |
+                  |int main(int argc, char** arg)
+                  |{
+                  |  int a = 0;
+                  |  int i = 0;
+                  |  while(i < 1000)
+                  |  {
+                  |    if(i != a) __VERIFIER_error();
+                  |    a = a + 1;
+                  |    i = i + 1;
+                  |  }
+                  |  if(i != 1000)  __VERIFIER_error();
+                  |  if(a != 1000)  __VERIFIER_error();
+                  |  return 0;
+                  |}
+                """.stripMargin
+
+    runVerify(toFile(code),
+               List(a == i, i >= 0, i < 1000, i === 1000, one === two),
+               useO2 = false,
+               usePredicateAbstraction = true,
+               useClang = "clang-3.7")
+  }
+
+  def test4(): Unit =
+  {
+    val x = Ints("%x")
+    val y = Ints("%y")
+
+    // interpolant have problem
+    // predicate abs ok
+    val code =  """
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |
+                  |int main(int argc, char** arg)
+                  |{
+                  |  int x = 0;
+                  |  int y = 0;
+                  |  while(x < 2000)
+                  |  {
+                  |      x++;
+                  |      y++;
+                  |  }
+                  |  if(x != 2000) __VERIFIER_error();
+                  |  if(y < 0)   __VERIFIER_error();
+                  |  return 0;
+                  |}
+                """.stripMargin
+
+    runVerify(toFile(code),
+               List(x >= 0, y >= 0, x === 2000, x < 2000),
+               useO2 = false,
+               usePredicateAbstraction = true,
+               useClang = "clang-3.7")
+  }
+
+  def test5(): Unit =
+  {
+    val x = Ints("%x")
+    val y = Ints("%y")
+
+    //
+    // both ok.
+    val code =  """
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |
+                  |int main(int argc, char** arg)
+                  |{
+                  |  int x = 0;
+                  |  int y = 0;
+                  |  while(x < 2000)
+                  |  {
+                  |      x++;
+                  |      y++;
+                  |  }
+                  |  if(x == -1) __VERIFIER_error();
+                  |  if(y == -1)   __VERIFIER_error();
+                  |  return 0;
+                  |}
+                """.stripMargin
+
+    runVerify(toFile(code),
+               List(x >= 0, y >= 0, x === 2000, x < 2000),
+               useO2 = false,
+               usePredicateAbstraction = true,
+               useClang = "clang-3.7")
+  }
+
+  def toFile(code:String):String=
+  {
+    import java.io.PrintWriter
     val tmpDir = System.getProperty("java.io.tmpdir")
+    val fileName = tmpDir + "verify.c"
+    new PrintWriter(fileName)
+    {
+      write(code)
+      close()
+    }
+    fileName
   }
 }
 
