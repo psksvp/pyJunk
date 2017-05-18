@@ -27,7 +27,7 @@ package object psksvp
   type BooleanTerm = TypedTerm[BoolTerm, Term]
   type AbstractDomain = Seq[Int]
 
-
+  var satHitCounter = 0
   /**
     *
     * @param term
@@ -43,6 +43,7 @@ package object psksvp
                    case _          => sys.error(s"psksvp.satisfiableCheck of terms $term solver returns fail")
                  }
     pop()
+    satHitCounter = satHitCounter + 1
     result
   }
 

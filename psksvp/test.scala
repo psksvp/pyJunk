@@ -2,7 +2,7 @@ package psksvp
 
 
 
-import psksvp.PredicateAbstraction.abstractPostOf
+import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
 import logics._
 
 
@@ -11,7 +11,7 @@ object runSkink
   def apply(filename:String,
             predicates:Seq[BooleanTerm],
             useO2:Boolean,
-            usePredicateAbstraction:Boolean = true,
+            usePredicateAbstraction:Boolean,
             useClang:String = "clang-4.0",
             maxIteration:Int = 10):Unit=
   {
@@ -25,6 +25,11 @@ object runSkink
                     filename)
 
      Main.main(args.filter(_.length > 0).toArray)
+
+    println("---------------------------------------------------")
+    println("equivalence checking satHitCounter:" + psksvp.satHitCounter)
+    println("time used in checking combination:" + psksvp.PredicateAbstraction.timeUsedCheckComb)
+    println("whole time used by predAbs:" + psksvp.PredicateAbstraction.timeUsedWhole)
   }
 }
 
@@ -36,7 +41,27 @@ object test
 {
   def main(args:Array[String]):Unit=
   {
-    test3()
+    test1()
+  }
+
+  def testDNF():Unit=
+  {
+    import scala.util.{Try, Success}
+    import au.edu.mq.comp.smtlib.interpreters.Resources
+    object resources extends Resources
+    import resources._
+    val p0 = Bools("p0")
+    val p1 = Bools("p1")
+    val dnf = (!p0 & !p1) | (!p0 & p1) | (p0 & !p1) | (p0 & p1)
+    val cnf = (!p0 | !p1) & (!p0 | p1) & (p0 | !p1) & (p0 | p1)
+    val r = using[Boolean](new SMTLIBInterpreter(solverFromName("Z3")))
+    {
+      implicit solver => println(equivalence(True(), dnf))
+                         println(equivalence(False(), cnf))
+
+                         Success(true)
+    }
+
   }
 
   def test1(): Unit =
@@ -44,6 +69,7 @@ object test
     val i = Ints("%i")
     val a = Ints("%a")
 
+    // predicate abs ok
     val code =  """
       |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
       |
@@ -58,7 +84,7 @@ object test
     """.stripMargin
 
     runSkink(toFile(code),
-               List(i >= 1, i <= 1000, i === 1001),
+               List(i >= 1, i <= 1000, !(i === 1001)),
                useO2 = false,
                usePredicateAbstraction = true,
                useClang = "clang-3.7")
@@ -69,6 +95,7 @@ object test
     val i = Ints("%i")
     val a = Ints("%a")
 
+    // predicate abs ok
     val code =  """
                   |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
                   |

@@ -9,12 +9,15 @@ import au.edu.mq.comp.automat.auto.NFA
 import au.edu.mq.comp.automat.edge.Implicits._
 import au.edu.mq.comp.skink.ir.Trace
 
-import scala.util.{Failure, Success}
+import scala.util.Success
 import logics._
 import psksvp.resources.using
 import au.edu.mq.comp.smtlib.typedterms.Commands
 import au.edu.mq.comp.smtlib.interpreters.Resources
-//object resources extends Resources
+import psksvp.PredicateAbstraction.repetitionsPairs
+import au.edu.mq.comp.automat.edge.LabDiEdge
+
+import scala.annotation.tailrec
 
 /**
  * Created by psksvp on 29/07/2016.
@@ -37,7 +40,7 @@ case class PredicateAbstraction(function:IRFunction,
     val linear = PredicateAbstraction.automatonFromTrace(choices)
     if(lastLocPredicateIsFalse)
     {
-      val newBackEdges = PredicateAbstraction.computeSafeBackEdges(function, choices, tracePredicates)
+      val newBackEdges = backEdges(tracePredicates)
       if (newBackEdges.isEmpty)
         linear
       else
@@ -49,21 +52,52 @@ case class PredicateAbstraction(function:IRFunction,
 
   /**
     *
+    * @param tracePredicates
+    * @return
+    */
+  def backEdges(tracePredicates: Seq[BooleanTerm]):Seq[LabDiEdge[Int, Int]] =
+  {
+    println("------------------safeBackEdges")
+
+    val completeItp = tracePredicates //True() +: preds :+ False()
+    val candidatePairs = repetitionsPairs(function, choices)
+    println(s"candidate pairs $candidatePairs")
+    val newBackEdges = for((i, j) <- candidatePairs;
+                           x1 = completeItp(j).unIndexed;
+                           x2 = completeItp(i + 1).unIndexed
+                           if checkPost( x1, j, choices(i), x2)) yield
+                           {
+                             println(s"new backedge found from $j to ${i + 1} with choice $i")
+                             (j ~> (i + 1))(choices(i))
+                           }
+
+    println("----------------------")
+    newBackEdges
+  }
+
+  /**
+    *
     * @return
     */
   def generatePredicates:Seq[BooleanTerm] =
   {
-    /**
-      *
-      * @param previous
-      * @param next
-      * @return
-      */
-    def isFixedPoint(previous:Seq[BooleanTerm], next:Seq[BooleanTerm]): Boolean =
+//    def isFixedPoint(previous:Seq[BooleanTerm], next:Seq[BooleanTerm]): Boolean =
+//    {
+//      require(previous.length == next.length)
+//      val v = for(i <- previous.indices) yield equivalence(previous(i), next(i))
+//      v.reduce(_ && _)
+//    }
+
+    @tailrec
+    def isFixedPoint(current:Seq[BooleanTerm], next:Seq[BooleanTerm]): Boolean =
     {
-      require(previous.length == next.length)
-      val v = for(i <- previous.indices) yield equivalence(previous(i), next(i))
-      v.reduce(_ && _)
+      require(current.length == next.length, "isFixedPoint current.length != next.Length")
+      if(current.isEmpty || next.isEmpty)
+        true
+      else if(!equivalence(current.head, next.head))
+        false
+      else
+        true && isFixedPoint(current.tail, next.tail)
     }
 
     ////////////-----------
@@ -103,12 +137,11 @@ case class PredicateAbstraction(function:IRFunction,
     for(i <- 1 until currentPredicatesOfLoc.length)
     {
       val newTermOfThisLoc = nextPredicatesOfLocation(i, currentPredicatesOfLoc)
-      //println("checking for true -> " + isEquivalence(True(), newTermOfThisLoc))
       if(equivalence(newTermOfThisLoc, currentPredicatesOfLoc(i)))
         nextLocPredicate(i) = newTermOfThisLoc
       else
         nextLocPredicate(i) = newTermOfThisLoc | currentPredicatesOfLoc(i)
-      print(".")
+      //print(".")
     }
     println()
     nextLocPredicate
@@ -163,21 +196,34 @@ case class PredicateAbstraction(function:IRFunction,
                        exitChoice:Int,
                        precondition:BooleanTerm):Int=
   {
+    val start = System.currentTimeMillis()
     import psksvp.PredicateAbstraction._
     val postcondition = combinationToDisjunctTerm(combination, predicateList)
+    timeUsedCheckComb = timeUsedCheckComb + (System.currentTimeMillis() - start)
+    if(checkPost(precondition, blockNumber, exitChoice, postcondition))
+      combination
+    else
+      -1
+  }
+
+  /**
+    *
+    * @param precondition
+    * @param blockIndex
+    * @param exitChoice
+    * @param postcondition
+    * @return
+    */
+  def checkPost(precondition:BooleanTerm, blockIndex:Int, exitChoice:Int, postcondition:BooleanTerm):Boolean=
+  {
     push()
-    val result = function.checkPost(precondition,
-                                    trace,
-                                    blockNumber,
-                                    exitChoice,
-                                    postcondition) match
-                  {
-                    case Success(v) => if (v) combination else -1
-                    case Failure(e) => sys.error(s"PredicateAbstraction.abstractBlock($blockNumber):" +
-                      s"Failure($e) from checkPost where the combination index is $combination")
-                  }
+    val r =  function.checkPost(precondition, trace, blockIndex, exitChoice, postcondition)
     pop()
-    result
+    r match
+    {
+      case Success(b) => b
+      case _          => sys.error("at function.checkPost solver fail at PredicateABstraction.checkPost")
+    }
   }
 }
 
@@ -189,6 +235,8 @@ case class PredicateAbstraction(function:IRFunction,
   */
 object PredicateAbstraction
 {
+  var timeUsedWhole:Long = 0
+  var timeUsedCheckComb:Long = 0
   // for testing purpose
   private var usePredicates:Seq[BooleanTerm] = Nil
   def setToUsePredicates(pl:Seq[BooleanTerm]):Unit=
@@ -219,6 +267,7 @@ object PredicateAbstraction
     def preconditionIndex:Int=source //precondition index of this transition
     def locationIndex:Int=sink       //location index  where this transition contributes its post
   }
+
 
   /**
     *
@@ -288,68 +337,19 @@ object PredicateAbstraction
     }
     else
     {
-      using[NFA[Int, Int]](new SMTLIBInterpreter(solverFromName("Z3")))
+      val start = System.currentTimeMillis()
+      val result = using[NFA[Int, Int]](new SMTLIBInterpreter(solverFromName("Z3")))
       {
         implicit solver => Success(PredicateAbstraction(function, choices, usePredicates).automaton)
       }
-      match
+      timeUsedWhole = timeUsedWhole + (System.currentTimeMillis() - start)
+
+      result match
       {
         case Success(a) => a
-        case _          => sys.error("hdsajdaskdjh")
+        case _          => sys.error("solver error at PredicateAbstraction.generateAutomaton")
       }
-
     }
-  }
-
-  /**
-    * Provide a list of new edges that preserve infeasibility.
-    *
-    * @param   function     The function to analyse
-    * @param   choices     An infeasible path of size n in `function` given by a sequence
-    *                      of choices
-    * @param   preds       Am inductive interpolants of size n - 2 (initial predicate is True and
-    *                      final must be False)
-    *
-    * @note
-    */
-  def computeSafeBackEdges(function: IRFunction,
-                           choices: Seq[Int],
-                           preds: Seq[TypedTerm[BoolTerm, Term]]) =
-  {
-    println("------------------safeBackEdges")
-    //println(s"Annotations: ${preds.map(_.termDef).map(showTerm(_))}")
-
-    val completeItp = preds //True() +: preds :+ False()
-    val candidatePairs = repetitionsPairs(function, choices)
-    println(s"candidate pairs $candidatePairs")
-    val newBackEdges =
-      for (
-        (i, j) <- candidatePairs;
-        x1 = completeItp(j).unIndexed;
-        x2 = completeItp(i + 1).unIndexed;
-        res = using(new SMTLIBInterpreter(solverFromName("Z3")))
-        {
-          implicit solver =>  function.checkPost( x1,
-                                                  Trace(choices),
-                                                  index = j,
-                                                  choice = choices(i),
-                                                  x2)
-        };
-        uu = {
-          println(s"Result of checkPost $res")
-          res match {
-            case Success(_) =>
-            case Failure(_) => sys.error(s"Result of checkPost $res")
-          }
-        }
-        if (res == Success(true))
-      ) yield {
-        println(s"new backedge found from $j to ${i + 1} with choice $i")
-        (j ~> (i + 1))(choices(i))
-      }
-
-    println("----------------------")
-    newBackEdges
   }
 
 
@@ -364,9 +364,9 @@ object PredicateAbstraction
             simplify: Boolean): BooleanTerm =
   {
     if (absDomain.size == math.pow(2, predicates.length).toInt)
-      False()  // short cut   // this may be incorrect for CNF
+      False()  // short cut for CNF
     else if(absDomain.isEmpty)
-      True()   // short cut  // this may be incorrect for CNF experiment.
+      True()   // short cut  for CNF
     else
     {
       if(!simplify)
@@ -383,7 +383,73 @@ object PredicateAbstraction
     }
   }
 
+  /**
+    * combine boolean vectors (disjunct clauses) to a conjunct
+    *
+    * @param absDomain
+    * @return BooleanExpression
+    */
+  def gammaCNF(absDomain: AbstractDomain,
+               predicates:Seq[BooleanTerm],
+               simplify: Boolean): BooleanTerm =
+  {
+    if (absDomain.size == math.pow(2, predicates.length).toInt)
+      False()  // short cut for CNF
+    else if(absDomain.isEmpty)
+      True()   // short cut  for CNF
+    else
+    {
+      if(!simplify)
+      {
+        val exprLs = for (i <- absDomain.indices) yield combinationToDisjunctTerm(absDomain(i), predicates)
+        exprLs.reduce(_ & _)
+      }
+      else
+      {
+        val minTerms = booleanMinimize(absDomain.toList, predicates.toList)
+        val terms = toCNF(minTerms)
+        terms
+      }
+    }
+  }
 
+  /**
+    * combine boolean vectors (conjunct clauses) to a disjunct term
+    *
+    * @param absDomain
+    * @return BooleanExpression
+    */
+  def gammaDNF(absDomain: AbstractDomain,
+               predicates:Seq[BooleanTerm],
+               simplify: Boolean): BooleanTerm =
+  {
+    if (absDomain.size == math.pow(2, predicates.length).toInt)
+      True()  // short cut for DNF
+    else if(absDomain.isEmpty)
+      False()   // short cut  for DNF
+    else
+    {
+      if(!simplify)
+      {
+        val exprLs = for (i <- absDomain.indices) yield combinationToConjunctTerm(absDomain(i), predicates)
+        exprLs.reduce(_ | _) // DNF
+      }
+      else
+      {
+        val minTerms = booleanMinimize(absDomain.toList, predicates.toList)
+        val terms = toDNF(minTerms)
+        terms
+      }
+    }
+  }
+
+
+  /**
+    *
+    * @param combination
+    * @param predicates
+    * @return
+    */
   def combinationToDisjunctTerm(combination:Int, predicates:Seq[BooleanTerm]):BooleanTerm=
   {
     val bin = binaryString(combination, predicates.length)
@@ -391,6 +457,12 @@ object PredicateAbstraction
     exprLs.reduce(_ | _)
   }
 
+  /**
+    *
+    * @param combination
+    * @param predicates
+    * @return
+    */
   def combinationToConjunctTerm(combination:Int, predicates:Seq[BooleanTerm]):BooleanTerm=
   {
     val bin = binaryString(combination, predicates.length)
@@ -398,15 +470,7 @@ object PredicateAbstraction
     exprLs.reduce(_ & _)
   }
 
-
-
-  /**
-    *
-    * @param precondition
-    * @param expression
-    * @param predicates
-    * @return
-    */
+  /*
   def abstractPostOf(expression:BooleanTerm,
                      precondition:BooleanTerm,
                      predicates:List[BooleanTerm]):BooleanTerm =
@@ -424,7 +488,7 @@ object PredicateAbstraction
     }
     println(s"valid combination is $domain")
     gamma(domain.filter(_ != -1), predicates,  simplify = true)
-  }
+  }*/
 }
 
 
