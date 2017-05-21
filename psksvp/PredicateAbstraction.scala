@@ -24,7 +24,8 @@ import scala.annotation.tailrec
  */
 case class PredicateAbstraction(function:IRFunction,
                                 choices:Seq[Int],
-                                predicateList:Seq[TypedTerm[BoolTerm, Term]])
+                                predicateList:Seq[TypedTerm[BoolTerm, Term]],
+                                termComposer:PredicateAbstraction.TermComposer)
                                 (implicit solver:SMTLIBInterpreter) extends Commands with Resources
 {
   lazy private val trace = Trace(choices)
@@ -92,8 +93,8 @@ case class PredicateAbstraction(function:IRFunction,
     def isFixedPoint(current:Seq[BooleanTerm], next:Seq[BooleanTerm]): Boolean =
     {
       require(current.length == next.length, "isFixedPoint current.length != next.Length")
-      if(current.isEmpty || next.isEmpty)
-        true
+      if(1 == current.length)  // last one
+        equivalence(current.head, next.head)
       else if(!equivalence(current.head, next.head))
         false
       else
@@ -110,11 +111,11 @@ case class PredicateAbstraction(function:IRFunction,
     {
       val locNextPredicates = generateLocationPredicates(locPredicates)
 
-      println("current Predicates ===============" )
-      locPredicates.foreach { t => println(termAsInfix(t))}
-      println("next Predicates =================" )
-      locNextPredicates.foreach {t => println(termAsInfix(t))}
-      println("-----------------------------")
+//      println("current Predicates ===============" )
+//      locPredicates.foreach { t => println(termAsInfix(t))}
+//      println("next Predicates =================" )
+//      locNextPredicates.foreach {t => println(termAsInfix(t))}
+//      println("-----------------------------")
 
       if(isFixedPoint(locPredicates, locNextPredicates))
         keepGoing = false
@@ -122,6 +123,9 @@ case class PredicateAbstraction(function:IRFunction,
         locPredicates = locNextPredicates
     }
 
+    println("\nFixed point reach with Predicates ===============" )
+    locPredicates.foreach { t => println(termAsInfix(t))}
+    println("------------")
     locPredicates
   }
 
@@ -141,9 +145,7 @@ case class PredicateAbstraction(function:IRFunction,
         nextLocPredicate(i) = newTermOfThisLoc
       else
         nextLocPredicate(i) = newTermOfThisLoc | currentPredicatesOfLoc(i)
-      //print(".")
     }
-    println()
     nextLocPredicate
   }
 
@@ -156,16 +158,17 @@ case class PredicateAbstraction(function:IRFunction,
     */
   def nextPredicatesOfLocation(loc:Int, currentPredicates:Seq[BooleanTerm]):BooleanTerm =
   {
-    import psksvp.PredicateAbstraction.gamma
+    //import psksvp.PredicateAbstraction.gamma
 
-   val absDomains = for (transition <- transitionMap(loc)) yield
+    val absDomains = for (transition <- transitionMap(loc)) yield
                     {
                       abstractPostOfBlock(transition.source,
                                            transition.choice,
                                            withPrecondition = currentPredicates(transition.preconditionIndex))
                     }
 
-    val terms = absDomains.map(gamma(_, predicateList, simplify = true)).reduce(_ | _)
+    //val terms = absDomains.map(gamma(_, predicateList, simplify = true)).reduce(_ | _)
+    val terms = absDomains.map(termComposer.gamma(_, predicateList, simplify = true)).reduce(_ | _)
     terms
   }
 
@@ -198,7 +201,8 @@ case class PredicateAbstraction(function:IRFunction,
   {
     val start = System.currentTimeMillis()
     import psksvp.PredicateAbstraction._
-    val postcondition = combinationToDisjunctTerm(combination, predicateList)
+    //val postcondition = combinationToDisjunctTerm(combination, predicateList)
+    val postcondition = termComposer.combinationToTerm(combination, predicateList)
     timeUsedCheckComb = timeUsedCheckComb + (System.currentTimeMillis() - start)
     if(checkPost(precondition, blockNumber, exitChoice, postcondition))
       combination
@@ -222,7 +226,7 @@ case class PredicateAbstraction(function:IRFunction,
     r match
     {
       case Success(b) => b
-      case _          => sys.error("at function.checkPost solver fail at PredicateABstraction.checkPost")
+      case _          => sys.error("at PredicateAbstraction.checkPost solver fail at PredicateABstraction.checkPost")
     }
   }
 }
@@ -267,7 +271,6 @@ object PredicateAbstraction
     def preconditionIndex:Int=source //precondition index of this transition
     def locationIndex:Int=sink       //location index  where this transition contributes its post
   }
-
 
   /**
     *
@@ -340,7 +343,10 @@ object PredicateAbstraction
       val start = System.currentTimeMillis()
       val result = using[NFA[Int, Int]](new SMTLIBInterpreter(solverFromName("Z3")))
       {
-        implicit solver => Success(PredicateAbstraction(function, choices, usePredicates).automaton)
+        implicit solver => Success(PredicateAbstraction(function,
+                                                        choices,
+                                                        usePredicates,
+                                                        new CNFComposer).automaton)
       }
       timeUsedWhole = timeUsedWhole + (System.currentTimeMillis() - start)
 
@@ -352,36 +358,6 @@ object PredicateAbstraction
     }
   }
 
-
-  /**
-    * combine boolean vectors (disjunct clauses) to a conjunct
-    *
-    * @param absDomain
-    * @return BooleanExpression
-    */
-  def gamma(absDomain: AbstractDomain,
-            predicates:Seq[BooleanTerm],
-            simplify: Boolean): BooleanTerm =
-  {
-    if (absDomain.size == math.pow(2, predicates.length).toInt)
-      False()  // short cut for CNF
-    else if(absDomain.isEmpty)
-      True()   // short cut  for CNF
-    else
-    {
-      if(!simplify)
-      {
-        val exprLs = for (i <- absDomain.indices) yield combinationToDisjunctTerm(absDomain(i), predicates)
-        exprLs.reduce(_ & _)
-      }
-      else
-      {
-        val minTerms = booleanMinimize(absDomain.toList, predicates.toList)
-        val terms = toCNF(minTerms)
-        terms
-      }
-    }
-  }
 
   /**
     * combine boolean vectors (disjunct clauses) to a conjunct
@@ -468,6 +444,33 @@ object PredicateAbstraction
     val bin = binaryString(combination, predicates.length)
     val exprLs = for (i <- bin.indices) yield if (bin(i) == '1') predicates(i) else !predicates(i)
     exprLs.reduce(_ & _)
+  }
+
+
+  trait TermComposer
+  {
+    def combinationToTerm(combination:Int, predicates:Seq[BooleanTerm]):BooleanTerm
+    def gamma(absDomain: AbstractDomain,
+              predicates:Seq[BooleanTerm],
+              simplify: Boolean): BooleanTerm
+  }
+
+  class DNFComposer extends TermComposer
+  {
+    def combinationToTerm(combination:Int,
+                          predicates:Seq[BooleanTerm]):BooleanTerm = combinationToConjunctTerm(combination, predicates)
+    def gamma(absDomain: AbstractDomain,
+              predicates:Seq[BooleanTerm],
+              simplify: Boolean): BooleanTerm = gammaDNF(absDomain, predicates, simplify)
+  }
+
+  class CNFComposer extends TermComposer
+  {
+    def combinationToTerm(combination:Int,
+                          predicates:Seq[BooleanTerm]):BooleanTerm = combinationToDisjunctTerm(combination, predicates)
+    def gamma(absDomain: AbstractDomain,
+              predicates:Seq[BooleanTerm],
+              simplify: Boolean): BooleanTerm = gammaCNF(absDomain, predicates, simplify)
   }
 
   /*

@@ -21,7 +21,7 @@ object runSkink
                     if(usePredicateAbstraction) "--use-predicate-abstraction" else "",
                     if(useO2) "" else "--no-O2",
                      "--use-clang", useClang,
-                     "-m", maxIteration.toString,
+                     /*"-m", maxIteration.toString,*/
                     filename)
 
      Main.main(args.filter(_.length > 0).toArray)
@@ -41,7 +41,7 @@ object test
 {
   def main(args:Array[String]):Unit=
   {
-    test1()
+    test6()
   }
 
   def testDNF():Unit=
@@ -212,6 +212,37 @@ object test
                useO2 = false,
                usePredicateAbstraction = true,
                useClang = "clang-3.7")
+  }
+
+  def test6(): Unit =
+  {
+    val x = Ints("%x")
+    val y = Ints("%y")
+
+    val code =  """
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |
+                  |int main(int argc, char** arg)
+                  |{
+                  |  int x = 2000;
+                  |  while(x > 0)
+                  |  {
+                  |      int y = 0;
+                  |      while(y < x) y++;
+                  |      if(y != x) __VERIFIER_error();
+                  |      x--;
+                  |  }
+                  |  if(x != 0) __VERIFIER_error();
+                  |
+                  |  return 0;
+                  |}
+                """.stripMargin
+
+    runSkink(toFile(code),
+              List(/*x === 2000,*/ x === 0, x > 0, y === x, y < x),
+              useO2 = false,
+              usePredicateAbstraction = true,
+              useClang = "clang-3.7")
   }
 
   def toFile(code:String):String=
