@@ -13,23 +13,23 @@ object runSkink
             useO2:Boolean,
             usePredicateAbstraction:Boolean,
             useClang:String = "clang-4.0",
-            maxIteration:Int = 10):Unit=
+            maxIteration:Int = 20):Unit=
   {
     import au.edu.mq.comp.skink.Main
-    PredicateAbstraction.setToUsePredicates(predicates)
+    PredicatesAbstraction.setToUsePredicates(predicates)
     val args = List("-v",
                     if(usePredicateAbstraction) "--use-predicate-abstraction" else "",
                     if(useO2) "" else "--no-O2",
                      "--use-clang", useClang,
-                     /*"-m", maxIteration.toString,*/
+                     "-m", maxIteration.toString,
                     filename)
 
      Main.main(args.filter(_.length > 0).toArray)
 
     println("---------------------------------------------------")
     println("equivalence checking satHitCounter:" + psksvp.satHitCounter)
-    println("time used in checking combination:" + psksvp.PredicateAbstraction.timeUsedCheckComb)
-    println("whole time used by predAbs:" + psksvp.PredicateAbstraction.timeUsedWhole)
+    println("time used in checking combination:" + psksvp.PredicatesAbstraction.timeUsedCheckComb)
+    println("whole time used by predAbs:" + psksvp.PredicatesAbstraction.timeUsedWhole)
   }
 }
 
@@ -41,7 +41,7 @@ object test
 {
   def main(args:Array[String]):Unit=
   {
-    test6()
+    test7()
   }
 
   def testDNF():Unit=
@@ -90,34 +90,7 @@ object test
                useClang = "clang-3.7")
   }
 
-  def test2(): Unit =
-  {
-    val i = Ints("%i")
-    val a = Ints("%a")
-
-    // predicate abs ok
-    val code =  """
-                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
-                  |
-                  |int main(int argc, char** arg)
-                  |{
-                  |  int a = 0;
-                  |  int i;
-                  |  for(i = 1; i <= 1000; i++)
-                  |  {
-                  |    a = a + 1;
-                  |  }
-                  |  if(a == 0) __VERIFIER_error();
-                  |  return 0;
-                  |}
-                """.stripMargin
-
-    runSkink(toFile(code),
-               List(a === 0, a > 0),
-               useO2 = false,
-               usePredicateAbstraction = true,
-               useClang = "clang-3.7")
-  }
+  def test2(): Unit = test7()
 
   def test3(): Unit =
   {
@@ -239,7 +212,68 @@ object test
                 """.stripMargin
 
     runSkink(toFile(code),
-              List(/*x === 2000,*/ x === 0, x > 0, y === x, y < x),
+              List( x === 0, x > 0, y === x, y < x),
+              useO2 = false,
+              usePredicateAbstraction = true,
+              useClang = "clang-3.7")
+  }
+
+  def test7(): Unit =
+  {
+    val x = Ints("%x")
+    val a = Ints("%a")
+
+    val code =  """
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |
+                  |int main(int argc, char** arg)
+                  |{
+                  |  int x = 1;
+                  |  int a = 0;
+                  |  while(x <= 1000)
+                  |  {
+                  |    a = a + 1;
+                  |    if(a != x) __VERIFIER_error();
+                  |    x = x + 1;
+                  |  }
+                  |  if(a != 1000) __VERIFIER_error();
+                  |  if(x != 1001) __VERIFIER_error();
+                  |  return 0;
+                  |}
+                """.stripMargin
+
+    runSkink(toFile(code),
+              List( x >= 0, x <= 1000, a === 1000, a === x, a === x - 1, x === 1001),
+              useO2 = false,
+              usePredicateAbstraction = true,
+              useClang = "clang-3.7")
+  }
+
+  def test8(): Unit =
+  {
+    val x = Ints("%x")
+    val a = Ints("%a")
+
+    val code =  """
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |
+                  |int main(int argc, char** arg)
+                  |{
+                  |  int x = 1;
+                  |  int a = 0;
+                  |  while(x <= 10)
+                  |  {
+                  |    a = a + x;
+                  |    x = x + 1;
+                  |  }
+                  |  if(a != 55) __VERIFIER_error();
+                  |  if(x != 11) __VERIFIER_error();
+                  |  return 0;
+                  |}
+                """.stripMargin
+
+    runSkink(toFile(code),
+              List( x >= 0, x <= 10, a === 55, a === x * 5, x === 11),
               useO2 = false,
               usePredicateAbstraction = true,
               useClang = "clang-3.7")
