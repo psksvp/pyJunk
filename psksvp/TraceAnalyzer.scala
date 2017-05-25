@@ -5,11 +5,9 @@ import au.edu.mq.comp.automat.edge.Implicits._
 import au.edu.mq.comp.automat.edge.LabDiEdge
 import au.edu.mq.comp.skink.ir.{IRFunction, Trace}
 import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
-import au.edu.mq.comp.smtlib.theories.{Core, IntegerArithmetics}
 
 import scala.util.Success
 import au.edu.mq.comp.smtlib.typedterms.Commands
-import logics._
 /**
   * Created by psksvp on 23/5/17.
   */
@@ -69,39 +67,35 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
   }
 
 
-//  def automatonWithBackEdges(tracePredicates:Seq[BooleanTerm]):NFA[Int, Int] =
-//  {
-//    lazy val backEdges:Seq[LabDiEdge[Int, Int]] =
-//    {
-//      println("------------------safeBackEdges")
-//      println(s"candidate pairs $repetitionsPairs")
-//      val newBackEdges = for((i, j) <- repetitionsPairs;
-//                             x1 = tracePredicates(j).unIndexed;
-//                             x2 = tracePredicates(i + 1).unIndexed
-//                             if checkPost( x1, j, choices(i), x2)) yield
-//                             {
-//                               println(s"new backedge found from $j to ${i + 1} with choice $i")
-//                               (j ~> (i + 1))(choices(i))
-//                             }
-//
-//      println("----------------------")
-//      newBackEdges
-//    }
-//
-//    println("last loc eq to false? >>>" + (if(tracePredicates.last == False()) "yes" else "no"))
-//    if(tracePredicates.last == False())
-//    {
-//      if (backEdges.isEmpty)
-//        linearAutomaton
-//      else
-//        NFA(linearAutomaton.getInit,
-//             linearAutomaton.transitions ++ backEdges,
-//             linearAutomaton.accepting,
-//             linearAutomaton.accepting)
-//    }
-//    else
-//      linearAutomaton
-//  }
+  def automatonWithBackEdges(tracePredicates:Seq[BooleanTerm])
+                            (implicit solver:SMTLIBInterpreter):NFA[Int, Int] =
+  {
+    lazy val backEdges:Seq[LabDiEdge[Int, Int]] =
+    {
+      println("------------------safeBackEdges")
+      println(s"candidate pairs $repetitionsPairs")
+      val newBackEdges = for((i, j) <- repetitionsPairs;
+                             x1 = tracePredicates(j).unIndexed;
+                             x2 = tracePredicates(i + 1).unIndexed
+                             if checkPost( x1, j, choices(i), x2)) yield
+                             {
+                               println(s"new backedge found from $j to ${i + 1} with choice $i")
+                               (j ~> (i + 1))(choices(i))
+                             }
+
+      println("----------------------")
+      newBackEdges
+    }
+
+    if (backEdges.isEmpty)
+      linearAutomaton
+    else
+      NFA(linearAutomaton.getInit,
+             linearAutomaton.transitions ++ backEdges,
+             linearAutomaton.accepting,
+             linearAutomaton.accepting)
+
+  }
 
   //////////////////////////////////////////////////
   def checkPost(precondition:BooleanTerm,
