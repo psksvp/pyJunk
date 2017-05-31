@@ -5,14 +5,19 @@ import au.edu.mq.comp.automat.edge.Implicits._
 import au.edu.mq.comp.automat.edge.LabDiEdge
 import au.edu.mq.comp.skink.ir.{IRFunction, Trace}
 import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
+import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax._
+import au.edu.mq.comp.smtlib.theories.BoolTerm
 
 import scala.util.Success
-import au.edu.mq.comp.smtlib.typedterms.Commands
+import au.edu.mq.comp.smtlib.typedterms.{Commands, TypedTerm}
+
+
 /**
   * Created by psksvp on 23/5/17.
   */
 case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
 {
+  lazy val length = choices.length
   //////////////////////////////////////////////////
   lazy val repetitionsPairs:Seq[(Int, Int)] =
   {
@@ -109,7 +114,28 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
     r match
     {
       case Success(b) => b
-      case _          => sys.error("at PredicateAbstraction.checkPost solver fail at PredicateABstraction.checkPost")
+      case _          => sys.error("at TraceAnalyzer.checkPost solver fail")
     }
   }
+
+  /////////////////////////////////////////
+  /// combined term in each block
+  lazy val blockTerms:Seq[TypedTerm[BoolTerm, Term]] = function.traceToTerms(Trace(choices))
+
+  /// variables in each block
+  lazy val blockVariables:Seq[Set[SortedQId]] = blockTerms.map(_.typeDefs)
+
+  /// variables used across block
+  lazy val commonVariables:Set[SortedQId] =
+  {
+    val s = for(i <- blockVariables.indices;
+                j <- blockVariables.indices if i != j) yield blockVariables(i) intersect blockVariables(j)
+    s.reduce(_ union _)
+  }
+
+  lazy val blockInstructionTerms:Seq[Seq[Term]] = for(term <- blockTerms) yield term.aTerm match
+                                                  {
+                                                    case AndTerm(t, ts) => t :: ts
+                                                    case _              => Nil
+                                                  }
 }

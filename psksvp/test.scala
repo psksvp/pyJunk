@@ -1,8 +1,9 @@
 package psksvp
 
-
+// this file is a scratch pad
 
 import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
+import au.edu.mq.comp.smtlib.typedterms.QuantifiedTerm
 import logics._
 
 
@@ -41,8 +42,18 @@ object test
 {
   def main(args:Array[String]):Unit=
   {
-    test7()
+    test12()
   }
+
+//  def testEliminator():Unit=
+//  {
+//    val cmp = Bools("cmp")
+//    val a = Ints("a")
+//    val five = Ints("five")
+//
+//    val k = new psksvp.Z3PyQE
+//    k.eliminate(List(cmp, five), five === a & cmp === (five < 1000) & True() === cmp )
+//  }
 
   def testDNF():Unit=
   {
@@ -61,7 +72,21 @@ object test
 
                          Success(true)
     }
+  }
 
+  def testExist():Unit=
+  {
+    object qt extends QuantifiedTerm
+    import qt._
+
+    val a = Ints("a")
+
+    val i = Ints("i")
+    val ex = exists(Ints("x1").symbol)
+             {
+               val x1 = Ints("x1")
+               x1 + 2 <= 1
+             }
   }
 
   def test1(): Unit =
@@ -97,6 +122,8 @@ object test
     val i = Ints("%i")
     val a = Ints("%a")
 
+    // pred abs works
+    // interpol require many iteration
     val code =  """
                   |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
                   |
@@ -192,6 +219,8 @@ object test
     val x = Ints("%x")
     val y = Ints("%y")
 
+    // pred abs works
+    // interpol require many iteration
     val code =  """
                   |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
                   |
@@ -223,6 +252,8 @@ object test
     val x = Ints("%x")
     val a = Ints("%a")
 
+    // pred abs works
+    // intepol works with too many iterations
     val code =  """
                   |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
                   |
@@ -254,6 +285,8 @@ object test
     val x = Ints("%x")
     val a = Ints("%a")
 
+    // both does not work
+    // non linear relation ship between a and x
     val code =  """
                   |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
                   |
@@ -274,6 +307,157 @@ object test
 
     runSkink(toFile(code),
               List( x >= 0, x <= 10, a === 55, a === x * 5, x === 11),
+              useO2 = false,
+              usePredicateAbstraction = false,
+              useClang = "clang-3.7")
+  }
+
+  def test9(): Unit =
+  {
+    val x = Ints("%x")
+    val y = Ints("%y")
+    val n = Ints("%n")
+
+    // both works
+    // count_up_down_true-unreach-call_true-termination.c
+    val code =  """
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |unsigned int __VERIFIER_nondet_uint();
+                  |
+                  |int main()
+                  |{
+                  |  unsigned int n = __VERIFIER_nondet_uint();
+                  |  unsigned int x=n, y=0;
+                  |  while(x>0)
+                  |  {
+                  |    x--;
+                  |    y++;
+                  |  }
+                  |  if(y != n) __VERIFIER_error();
+                  |}
+                """.stripMargin
+
+    runSkink(toFile(code),
+              List( n >= 0, x === n, x > 0, y === 0, y === n, y === n - x),
+              useO2 = false,
+              usePredicateAbstraction = true,
+              useClang = "clang-3.7")
+  }
+
+  def test10(): Unit =
+  {
+    val i = Ints("%i")
+    val j = Ints("%j")
+
+    // interpolant works
+    // predicate abstraction works
+    // cggmp2005_true-unreach-call.c
+    val code =  """
+                  |// Source: A. Costan, S. Gaubert, E. Goubault, M. Martel, S. Putot: "A Policy
+                  |// Iteration Algorithm for Computing Fixed Points in Static Analysis of
+                  |// Programs", CAV 2005
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |unsigned int __VERIFIER_nondet_uint();
+                  |
+                  |int main()
+                  |{
+                  |    int i,j;
+                  |    i = 1;
+                  |    j = 10;
+                  |    while (j >= i)
+                  |    {
+                  |        i = i + 2;
+                  |        j = -1 + j;
+                  |    }
+                  |    if(j != 6) __VERIFIER_error();
+                  |    return 0;
+                  |}
+                """.stripMargin
+
+    runSkink(toFile(code),
+              List( i === 1, j === 10, j === 6, j >= i, i === Ints(21) - (j * 2) ),
+              useO2 = false,
+              usePredicateAbstraction = true,
+              useClang = "clang-3.7")
+  }
+
+  def test11(): Unit =
+  {
+    val x = Ints("%x")
+    val y = Ints("%y")
+
+    // interpolant: max iter reach
+    // predicate abstraction works 399 sec
+    val code =  """
+                  |// Source: Sumit Gulwani, Nebosja Jojic: "Program Verification as
+                  |// Probabilistic Inference", POPL 2007.
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |
+                  |int main()
+                  |{
+                  |    int x = 0;
+                  |    int y = 50;
+                  |    while(x < 100)
+                  |    {
+                  |	     if (x < 50)
+                  |	       x = x + 1;
+                  |	     else
+                  |      {
+                  |	       x = x + 1;
+                  |	       y = y + 1;
+                  |	     }
+                  |    }
+                  |    if(y != 100) __VERIFIER_error();
+                  |    return 0;
+                  |}
+                """.stripMargin
+
+    runSkink(toFile(code),
+              List( x === 0, y === 50, x < 100, x < 50, y === 100, x === y),
+              useO2 = false,
+              usePredicateAbstraction = true,
+              useClang = "clang-3.7")
+  }
+
+  def test12(): Unit =
+  {
+    val m = Ints("%m")
+    val n = Ints("%n")
+    val x = Ints("%x")
+    val call1 = Ints("%call1")
+
+    // interpolant: max iter reach
+    // predicate abstraction     --- untest
+    // gj2007b_true-unreach-call.c
+    val code =  """
+                  |// Source: Sumit Gulwani, Nebosja Jojic: "Program Verification as
+                  |// Probabilistic Inference", POPL 2007.
+                  |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                  |unsigned int __VERIFIER_nondet_uint();
+                  |
+                  |
+                  |int main()
+                  |{
+                  |    int x = 0;
+                  |    int m = 0;
+                  |    int n = __VERIFIER_nondet_int();
+                  |    while(x < n)
+                  |    {
+                  |	      if(__VERIFIER_nondet_int())
+                  |       {
+                  |	        m = x;
+                  |	      }
+                  |	      x = x + 1;
+                  |    }
+                  |
+                  |    if(!(m >= 0 || n <= 0) ) __VERIFIER_error(); //__VERIFIER_assert((m >= 0 || n <= 0));
+                  |    if(!(m < n || n <= 0)  ) __VERIFIER_error(); //__VERIFIER_assert((m < n || n <= 0));
+                  |    return 0;
+                  |}
+                """.stripMargin
+
+    runSkink(toFile(code),
+              List(call1 === 0, m === x, x < n, n <= 0, n >= 0, m >= 0, m < n ),
               useO2 = false,
               usePredicateAbstraction = true,
               useClang = "clang-3.7")

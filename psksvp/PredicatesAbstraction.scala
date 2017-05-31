@@ -18,16 +18,16 @@ import scala.annotation.tailrec
  * Created by psksvp on 29/07/2016.
  */
 case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
-                                 predicateList:Seq[TypedTerm[BoolTerm, Term]],
+                                 inputPredicates:Seq[TypedTerm[BoolTerm, Term]],
                                  termComposer:PredicatesAbstraction.TermComposer)
                                  (implicit solver:SMTLIBInterpreter) extends Commands with Resources
 {
-  lazy val combinationSize:Int = Math.pow(2, predicateList.length).toInt
+  lazy val combinationSize:Int = Math.pow(2, inputPredicates.length).toInt
 
   lazy val tracePredicates:Seq[BooleanTerm] =
   {
     @tailrec
-    def fixedPoint(current:Seq[BooleanTerm], next:Seq[BooleanTerm]): Boolean =
+    def equalTest(current:Seq[BooleanTerm], next:Seq[BooleanTerm]): Boolean =
     {
       require(0 != current.length && 0 != next.length, "psksvp.PredicatesAbstraction.fixedPoint cannot check zero length")
       require(current.length == next.length, "psksvp.PredicatesAbstraction.fixedPoint current.length != next.Length")
@@ -37,23 +37,17 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
       else if(!equivalence(current.head, next.head))
         false
       else
-        true && fixedPoint(current.tail, next.tail)
+        true && equalTest(current.tail, next.tail)
     }
 
-    ///////////
-    @tailrec
-    def runFixedPoint(currentPredicates:Seq[BooleanTerm]):Seq[BooleanTerm] =
-    {
-      val nextPredicates = generateLocationsPredicates(currentPredicates)
-      if(fixedPoint(currentPredicates, nextPredicates))
-        currentPredicates
-      else
-        runFixedPoint(nextPredicates)
-    }
+    import psksvp.ADT.FixedPoint
 
     ////////////-----------
     println("I am doing the trace" + traceAnalyzer.choices)
-    val result = runFixedPoint(True() :: List.fill[BooleanTerm](traceAnalyzer.choices.length - 1)(False()))
+
+    val result = FixedPoint(equalTest,
+                            computePredicates).run(True() :: List.fill[BooleanTerm](traceAnalyzer.length - 1)(False()))
+
     println("\nFixed point reached with Predicates ===============" )
     result.foreach { t => println(termAsInfix(t))}
     println("------------")
@@ -77,13 +71,13 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
     * @param currentPredicates
     * @return
     */
-  def generateLocationsPredicates(currentPredicates:Seq[BooleanTerm]):Seq[BooleanTerm] =
+  def computePredicates(currentPredicates:Seq[BooleanTerm]):Seq[BooleanTerm] =
   {
     val nextPredicate = Array.fill[BooleanTerm](currentPredicates.length)(True())
 
     for(i <- 1 until currentPredicates.length)
     {
-      val newTermOfThisLoc = nextPredicatesOfLocation(i, currentPredicates)
+      val newTermOfThisLoc = nextPredicateAtLocation(i, currentPredicates)
       if(equivalence(newTermOfThisLoc, currentPredicates(i)))
         nextPredicate(i) = newTermOfThisLoc
       else
@@ -99,7 +93,7 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
     * @param currentPredicates
     * @return
     */
-  def nextPredicatesOfLocation(loc:Int, currentPredicates:Seq[BooleanTerm]):BooleanTerm =
+  def nextPredicateAtLocation(loc:Int, currentPredicates:Seq[BooleanTerm]):BooleanTerm =
   {
     val absDomains = for (transition <- traceAnalyzer.transitionMap(loc)) yield
                      {
@@ -108,7 +102,7 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
                                            withPrecondition = currentPredicates(transition.preconditionIndex))
                      }
 
-    val terms = absDomains.map(termComposer.gamma(_, predicateList, simplify = true)).reduce(_ | _)
+    val terms = absDomains.map(termComposer.gamma(_, inputPredicates, simplify = true)).reduce(_ | _)
     terms
   }
 
@@ -141,7 +135,7 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
   {
     val start = System.currentTimeMillis()
     import psksvp.PredicatesAbstraction._
-    val postcondition = termComposer.combinationToTerm(combination, predicateList)
+    val postcondition = termComposer.combinationToTerm(combination, inputPredicates)
     timeUsedCheckComb = timeUsedCheckComb + (System.currentTimeMillis() - start)
     if(traceAnalyzer.checkPost(precondition, blockNumber, exitChoice, postcondition))
       combination
@@ -178,6 +172,14 @@ object PredicatesAbstraction
             iteration: Int): NFA[Int, Int] =
   {
     val traceAnalyzer = TraceAnalyzer(function, choices)
+
+//    println("blockVariables")
+//    println(traceAnalyzer.blockVariables)
+//    println("-------------\ncommon variables\n")
+//    println(traceAnalyzer.commonVariables)
+//    println("-------------\ninstruction terms\n")
+//    println(traceAnalyzer.blockInstructionTerms)
+
     if (traceAnalyzer.repetitionsPairs.isEmpty)
     {
       println(choices)
@@ -186,6 +188,9 @@ object PredicatesAbstraction
     }
     else
     {
+      println("running with predicates: ")
+      usePredicates.foreach{p => print(termAsInfix(p) + ",")}
+      println()
       val start = System.currentTimeMillis()
       val result = using[NFA[Int, Int]](new SMTLIBInterpreter(solverFromName("Z3")))
       {
