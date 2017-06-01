@@ -42,7 +42,7 @@ object test
 {
   def main(args:Array[String]):Unit=
   {
-    test12()
+    test11()
   }
 
 //  def testEliminator():Unit=
@@ -457,9 +457,10 @@ object test
                 """.stripMargin
 
     runSkink(toFile(code),
-              List(call1 === 0, m === x, x < n, n <= 0, n >= 0, m >= 0, m < n ),
+              List(call1 === 0, m === x, x < n, n <= 0, n >= 0, m >= 0 | n <= 0, m < n | n <= 0 ),
               useO2 = false,
               usePredicateAbstraction = true,
+              maxIteration = 30,
               useClang = "clang-3.7")
   }
 

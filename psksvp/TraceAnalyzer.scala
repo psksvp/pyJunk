@@ -15,21 +15,42 @@ import au.edu.mq.comp.smtlib.typedterms.{Commands, TypedTerm}
 /**
   * Created by psksvp on 23/5/17.
   */
+
+/**
+  *
+  * @param source
+  * @param sink
+  * @param choice
+  * @param function
+  * @param trace
+  */
+case class Transition(source:Int, sink:Int, choice:Int, function:IRFunction, trace:Trace)
+{
+  val preconditionIndex:Int = source //precondition index of this transition
+  val locationIndex:Int = sink //location index  where this transition contributes its post
+
+  case class BlockEffect(term:BooleanTerm, lastIndexMap:Map[String, Int])
+  lazy val blockEffect:BlockEffect =
+  {
+    val (e, m) = function.traceBlockEffect(trace, source, choice)
+    BlockEffect(e, m)
+  }
+}
+
+/**
+  *
+  * @param function
+  * @param choices
+  */
 case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
 {
-  lazy val length = choices.length
+  lazy val length:Int = choices.length
+  lazy val trace:Trace = Trace(choices)
   //////////////////////////////////////////////////
   lazy val repetitionsPairs:Seq[(Int, Int)] =
   {
-    val indexPartition: Seq[Seq[Int]] = function.traceToRepetitions(Trace(choices))
+    val indexPartition: Seq[Seq[Int]] = function.traceToRepetitions(trace)
     indexPartition.filter(_.size > 1).map(_.toList).map(generatePairs(_)).flatten.flatten
-  }
-
-  //////////////////////////////////////////////////
-  case class Transition(source: Int, sink: Int, choice: Int)
-  {
-    def preconditionIndex: Int = source //precondition index of this transition
-    def locationIndex: Int = sink //location index  where this transition contributes its post
   }
 
   //////////////////////////////////////////////////
@@ -40,7 +61,7 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
                  {
                    l -> Transition(source = l - 1,
                                     sink = l,
-                                    choice = choices(l - 1)) // linear
+                                    choice = choices(l - 1), function, trace) // linear
                  }
 
     val backEdge = for ((i, j) <- repetitionsPairs) yield
@@ -51,7 +72,7 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
                      // from i to i + 1
                      val transition = Transition(source = j,
                                                 sink = i + 1,
-                                                choice = exitChoice)
+                                                choice = exitChoice, function, trace)
 
                      transition.locationIndex -> transition
                    }
@@ -64,6 +85,7 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
     map
   }
 
+
   //////////////////////////////////////////////////
   lazy val linearAutomaton: NFA[Int, Int] =
   {
@@ -71,10 +93,27 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
     NFA(Set(0), transitions.toSet, Set(choices.length), Set(choices.length))
   }
 
-
+  //////////////////////////////////////////////////
   def automatonWithBackEdges(tracePredicates:Seq[BooleanTerm])
                             (implicit solver:SMTLIBInterpreter):NFA[Int, Int] =
   {
+    //////////////////////////////////////////////////
+    def checkPost(precondition:BooleanTerm,
+                  blockIndex:Int,
+                  exitChoice:Int,
+                  postcondition:BooleanTerm)(implicit solver:SMTLIBInterpreter):Boolean =
+    {
+      push()
+      val r =  function.checkPost(precondition, trace, blockIndex, exitChoice, postcondition)
+      pop()
+      r match
+      {
+        case Success(b) => b
+        case _          => sys.error("at TraceAnalyzer.checkPost solver fail")
+      }
+    }
+
+    ////////////////////////////////////////////////////////////
     lazy val backEdges:Seq[LabDiEdge[Int, Int]] =
     {
       println("------------------safeBackEdges")
@@ -102,25 +141,9 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
 
   }
 
-  //////////////////////////////////////////////////
-  def checkPost(precondition:BooleanTerm,
-                blockIndex:Int,
-                exitChoice:Int,
-                postcondition:BooleanTerm)(implicit solver:SMTLIBInterpreter):Boolean=
-  {
-    push()
-    val r =  function.checkPost(precondition, Trace(choices), blockIndex, exitChoice, postcondition)
-    pop()
-    r match
-    {
-      case Success(b) => b
-      case _          => sys.error("at TraceAnalyzer.checkPost solver fail")
-    }
-  }
-
   /////////////////////////////////////////
   /// combined term in each block
-  lazy val blockTerms:Seq[TypedTerm[BoolTerm, Term]] = function.traceToTerms(Trace(choices))
+  lazy val blockTerms:Seq[TypedTerm[BoolTerm, Term]] = function.traceToTerms(trace)
 
   /// variables in each block
   lazy val blockVariables:Seq[Set[SortedQId]] = blockTerms.map(_.typeDefs)

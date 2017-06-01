@@ -73,28 +73,12 @@ package object psksvp
     * @param q  postcondition
     * @return true of p is included in q
     */
-  def checkPost(p:BooleanTerm,
-                e:BooleanTerm,
-                q:BooleanTerm):Try[Boolean]=
+  def checkPost(p:BooleanTerm, e:BooleanTerm, q:BooleanTerm)
+               (implicit solver:SMTLIBInterpreter):Boolean = satisfiableCheck(p & e & !q) match
   {
-    val result = using(new SMTLIBInterpreter(solverFromName("Z3")))
-    {
-      implicit solver => isSat(p & e & !q) match
-      {
-        //  if Sat, checkPost is false
-        case Success(Sat())   => Success(false)
-
-        //  if unSat checkPost is true
-        case Success(UnSat()) => Success(true)
-
-        case Success(UnKnown()) =>
-          sys.error(s"psksvp.checkPost Solver returned UnKnown for check-sat")
-
-        case Failure(f) =>
-          sys.error(s"psksvp.checkPost Solver failed to determine sat-status in checkpost $f")
-      }
-    }
-    result
+    case Sat()   => false
+    case UnSat() => true
+    case _       => false
   }
   /**
     *
