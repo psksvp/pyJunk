@@ -83,7 +83,7 @@ package object psksvp
   /**
     *
     */
-  def termAsInfix(term: BooleanTerm):String=
+  def termAsInfix[A](term: TypedTerm[A, Term]):String=
   {
     /**
       *
@@ -91,7 +91,6 @@ package object psksvp
     object InfixSMTLibTermPrettyPrinter extends au.edu.mq.comp.smtlib.parser.SMTLIB2PrettyPrinter
     {
       import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax._
-
       override def toDoc( astNode : ASTNode ) : Doc = astNode match
       {
         case v @ LessThanEqualTerm( v1, v2 ) =>
@@ -105,8 +104,35 @@ package object psksvp
         case v @ EqualTerm( v1, v2 ) =>
           char ( '(' ) <> toDoc ( v1 ) <> space <> text ( "=" ) <> space <> toDoc ( v2 ) <> text ( ")" ) <> space
 
+        case v @ AndTerm (v1, v2) =>
+          char (' ') <> text ("And(") <> space <> toDoc (v1) <> comma  <> ssep (v2.map (toDoc), comma) <> text (")") <> space
+        case v @ OrTerm (v1, v2) =>
+          char (' ') <> text ("Or(") <> space <> toDoc (v1) <> comma <> ssep (v2.map (toDoc), comma) <> text (")") <> space
+        case v @ XorTerm (v1, v2) =>
+          char (' ') <> text ("Xor(") <> space <> toDoc (v1) <> comma <> toDoc (v2) <> text (")") <> space
+        case v @ ImplyTerm (v1, v2) =>
+          char (' ') <> text ("Implies") <> space <> toDoc (v1) <> comma <> ssep (v2.map (toDoc), comma) <> text (")") <> space
+        //case v @ IfThenElseTerm (v1, v2, v3) =>
+        //  char (' ') <> text ("ite") <> space <> toDoc (v1) <> toDoc (v2) <> toDoc (v3) <> text (")") <> space
+        case v @ NotTerm (v1) =>
+          char (' ') <> text ("Not(") <> space <> toDoc (v1) <> text (")") <> space
+
+        case v @ PlusTerm (v1, v2) =>
+          char ('(') <> toDoc (v1) <> space <> text ("+") <> space <> ssep (v2.map (toDoc), emptyDoc) <> text (")") <> space
+        case v @ SubTerm (v1, v2) =>
+          char ('(') <> toDoc (v1) <> space <> text ("-") <> space <> ssep (v2.map (toDoc), emptyDoc) <> text (")") <> space
+        case v @ MultTerm (v1, v2) =>
+          char ('(') <> toDoc (v1) <> space <> text ("*") <> space <> ssep (v2.map (toDoc), emptyDoc) <> text (")") <> space
+        case v @ IntDivTerm (v1, v2) =>
+          char ('(') <> toDoc (v1) <> space <> text ("//") <> space <> ssep (v2.map (toDoc), emptyDoc) <> text (")") <> space
+        case v @ RealDivTerm (v1, v2) =>
+          char ('(') <> toDoc (v1) <> space <> text ("/") <> space <> ssep (v2.map (toDoc), emptyDoc) <> text (")") <> space
+        case v @ IntModTerm (v1, v2) =>
+          char ('(')  <> toDoc (v1) <> text ("%") <> space <> toDoc (v2) <> text (")") <> space
+
         case _ => super.toDoc(astNode)
       }
+
     }
 
     InfixSMTLibTermPrettyPrinter.show(term.termDef)
@@ -210,5 +236,19 @@ package object psksvp
       case Some(sc) => sc
       case None     => sys.error(s"TraceRefinement: can't find solver called $name in config file")
     }
+  }
+
+  def toFile(code:String, fileExt:String = ".c"):String=
+  {
+    import java.io.PrintWriter
+    val tmpDir = System.getProperty("java.io.tmpdir")
+    val file = scala.util.Random.alphanumeric.take(10).mkString
+    val fileName =  tmpDir + file + fileExt
+    new PrintWriter(fileName)
+    {
+      write(code)
+      close()
+    }
+    fileName
   }
 }

@@ -16,26 +16,7 @@ import au.edu.mq.comp.smtlib.typedterms.{Commands, TypedTerm}
   * Created by psksvp on 23/5/17.
   */
 
-/**
-  *
-  * @param source
-  * @param sink
-  * @param choice
-  * @param function
-  * @param trace
-  */
-case class Transition(source:Int, sink:Int, choice:Int, function:IRFunction, trace:Trace)
-{
-  val preconditionIndex:Int = source //precondition index of this transition
-  val locationIndex:Int = sink //location index  where this transition contributes its post
 
-  case class BlockEffect(term:BooleanTerm, lastIndexMap:Map[String, Int])
-  lazy val blockEffect:BlockEffect =
-  {
-    val (e, m) = function.traceBlockEffect(trace, source, choice)
-    BlockEffect(e, m)
-  }
-}
 
 /**
   *
@@ -44,6 +25,8 @@ case class Transition(source:Int, sink:Int, choice:Int, function:IRFunction, tra
   */
 case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
 {
+  import psksvp.TraceAnalyzer._
+
   lazy val length:Int = choices.length
   lazy val trace:Trace = Trace(choices)
   //////////////////////////////////////////////////
@@ -59,9 +42,11 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
     // start from 1 because, l0 is always true
     val linear = for (l <- 1 until choices.length) yield
                  {
+                   val (e, m) = function.traceBlockEffect(trace, l - 1, choices(l - 1))
                    l -> Transition(source = l - 1,
                                     sink = l,
-                                    choice = choices(l - 1), function, trace) // linear
+                                    choice = choices(l - 1),
+                                    effect = BlockEffect(e, m)) // linear
                  }
 
     val backEdge = for ((i, j) <- repetitionsPairs) yield
@@ -70,9 +55,11 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
                      val exitChoice = choices(i) // take choice from i because it is a repeat from j and i + 1
                      // thus exit choice from j to i + 1 is the same as
                      // from i to i + 1
+                     val (e, m) = function.traceBlockEffect(trace, j, exitChoice)
                      val transition = Transition(source = j,
                                                 sink = i + 1,
-                                                choice = exitChoice, function, trace)
+                                                choice = exitChoice,
+                                                effect = BlockEffect(e, m))
 
                      transition.locationIndex -> transition
                    }
@@ -141,6 +128,19 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
 
   }
 
+  //////////////////////////////////////////
+  // check post specific to this trace only.
+  def checkTransitionPost(fromSource:Int, toSink:Int):Boolean =
+  {
+    require(transitionMap.isDefinedAt(toSink), s"checkTransitionPost(fromSource=$fromSource, toSink=$toSink), " +
+                                               s"there is no such transition on trace $choices")
+
+    val t = transitionMap(toSink)
+
+
+    false
+  }
+
   /////////////////////////////////////////
   /// combined term in each block
   lazy val blockTerms:Seq[TypedTerm[BoolTerm, Term]] = function.traceToTerms(trace)
@@ -161,4 +161,21 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
                                                     case AndTerm(t, ts) => t :: ts
                                                     case _              => Nil
                                                   }
+}
+
+object TraceAnalyzer
+{
+  case class BlockEffect(term:BooleanTerm, lastIndexMap:Map[String, Int])
+
+  /**
+    *
+    * @param source
+    * @param sink
+    * @param choice
+    */
+  case class Transition(source:Int, sink:Int, choice:Int, effect:BlockEffect)
+  {
+    val preconditionIndex:Int = source //precondition index of this transition
+    val locationIndex:Int = sink //location index  where this transition contributes its post
+  }
 }

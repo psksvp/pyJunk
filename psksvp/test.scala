@@ -3,6 +3,7 @@ package psksvp
 // this file is a scratch pad
 
 import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
+import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax.SSymbol
 import au.edu.mq.comp.smtlib.typedterms.QuantifiedTerm
 import logics._
 
@@ -42,18 +43,9 @@ object test
 {
   def main(args:Array[String]):Unit=
   {
-    test11()
+    test3()
   }
 
-//  def testEliminator():Unit=
-//  {
-//    val cmp = Bools("cmp")
-//    val a = Ints("a")
-//    val five = Ints("five")
-//
-//    val k = new psksvp.Z3PyQE
-//    k.eliminate(List(cmp, five), five === a & cmp === (five < 1000) & True() === cmp )
-//  }
 
   def testDNF():Unit=
   {
@@ -74,19 +66,21 @@ object test
     }
   }
 
-  def testExist():Unit=
+  def testQE():Unit=
   {
     object qt extends QuantifiedTerm
     import qt._
 
     val a = Ints("a")
-
-    val i = Ints("i")
-    val ex = exists(Ints("x1").symbol)
+    val cmp = Bools("cmp")
+    val five = Ints("five")
+    val ex = exists(five.symbol, cmp.symbol.asInstanceOf[SSymbol])
              {
-               val x1 = Ints("x1")
-               x1 + 2 <= 1
+               five === a & cmp === (five < 1000) & False() === cmp
              }
+
+    val r = psksvp.SMTLIB.QuantifierElimination(ex)
+    println(r)
   }
 
   def test1(): Unit =
@@ -450,31 +444,22 @@ object test
                   |	      x = x + 1;
                   |    }
                   |
-                  |    if(!(m >= 0 || n <= 0) ) __VERIFIER_error(); //__VERIFIER_assert((m >= 0 || n <= 0));
-                  |    if(!(m < n || n <= 0)  ) __VERIFIER_error(); //__VERIFIER_assert((m < n || n <= 0));
+                  |    //if(!(m >= 0 || n <= 0) ) __VERIFIER_error(); //__VERIFIER_assert((m >= 0 || n <= 0));
+                  |    //if(!(m < n || n <= 0)  ) __VERIFIER_error(); //__VERIFIER_assert((m < n || n <= 0));
+                  |    if(!((m >= 0 || n <= 0) && (m < n || n <= 0)))
+                  |      __VERIFIER_error();
                   |    return 0;
                   |}
                 """.stripMargin
 
+    def implies(a:BooleanTerm, b:BooleanTerm):BooleanTerm = !a | b
+
     runSkink(toFile(code),
-              List(call1 === 0, m === x, x < n, n <= 0, n >= 0, m >= 0 | n <= 0, m < n | n <= 0 ),
+              List(call1 === 0, m === x, x < n, n < 0, n > 0, n === 0, (m >= 0 | n <= 0) & (m < n | n <= 0 )),
               useO2 = false,
               usePredicateAbstraction = true,
               maxIteration = 30,
               useClang = "clang-3.7")
-  }
-
-  def toFile(code:String):String=
-  {
-    import java.io.PrintWriter
-    val tmpDir = System.getProperty("java.io.tmpdir")
-    val fileName = tmpDir + "verify.c"
-    new PrintWriter(fileName)
-    {
-      write(code)
-      close()
-    }
-    fileName
   }
 }
 
