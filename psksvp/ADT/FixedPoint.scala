@@ -10,6 +10,7 @@ class FixedPoint[T](equalp:(T, T)=>Boolean, stepf:T => T)
   @tailrec
   final def run(current:T):T=
   {
+    print('.')
     val next = stepf(current)
     if (equalp(next, current))
       current

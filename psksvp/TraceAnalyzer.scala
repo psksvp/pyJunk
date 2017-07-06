@@ -3,13 +3,12 @@ package psksvp
 import au.edu.mq.comp.automat.auto.NFA
 import au.edu.mq.comp.automat.edge.Implicits._
 import au.edu.mq.comp.automat.edge.LabDiEdge
+import au.edu.mq.comp.skink.ir.llvm.LLVMFunction
 import au.edu.mq.comp.skink.ir.{IRFunction, Trace}
 import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
 import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax._
-import au.edu.mq.comp.smtlib.theories.BoolTerm
+import au.edu.mq.comp.smtlib.typedterms.{Commands, QuantifiedTerm}
 
-import scala.util.Success
-import au.edu.mq.comp.smtlib.typedterms.{Commands, TypedTerm}
 
 
 /**
@@ -24,11 +23,13 @@ import au.edu.mq.comp.smtlib.typedterms.{Commands, TypedTerm}
   * @param choices
   */
 case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
+                                                                   with QuantifiedTerm
 {
   import psksvp.TraceAnalyzer._
 
   lazy val length:Int = choices.length
   lazy val trace:Trace = Trace(choices)
+  lazy val traceTerms:Seq[BooleanTerm] = function.traceToTerms(trace)
   //////////////////////////////////////////////////
   lazy val repetitionsPairs:Seq[(Int, Int)] =
   {
@@ -42,6 +43,10 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
     // start from 1 because, l0 is always true
     val linear = for (l <- 1 until choices.length) yield
                  {
+                   // pre compute the effect here is ok, because I use the effect to do checkPost only.
+                   // looking at the LLVMFunction.checkPost, everytime the function checkPost is called using
+                   // the same block number an exit choice, the effect would be exactly the same for the
+                   // same trace.
                    val (e, m) = function.traceBlockEffect(trace, l - 1, choices(l - 1))
                    l -> Transition(source = l - 1,
                                     sink = l,
@@ -57,9 +62,9 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
                      // from i to i + 1
                      val (e, m) = function.traceBlockEffect(trace, j, exitChoice)
                      val transition = Transition(source = j,
-                                                sink = i + 1,
-                                                choice = exitChoice,
-                                                effect = BlockEffect(e, m))
+                                                 sink = i + 1,
+                                                 choice = exitChoice,
+                                                 effect = BlockEffect(e, m))
 
                      transition.locationIndex -> transition
                    }
@@ -84,19 +89,27 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
   def automatonWithBackEdges(tracePredicates:Seq[BooleanTerm])
                             (implicit solver:SMTLIBInterpreter):NFA[Int, Int] =
   {
-    //////////////////////////////////////////////////
-    def checkPost(precondition:BooleanTerm,
-                  blockIndex:Int,
-                  exitChoice:Int,
-                  postcondition:BooleanTerm)(implicit solver:SMTLIBInterpreter):Boolean =
+    //////////////////////////////////////////
+    // check post specific to this trace only.
+    def checkTransitionPost(fromSource:Int, toSink:Int, exitChoice:Int):Boolean =
     {
-      push()
-      val r =  function.checkPost(precondition, trace, blockIndex, exitChoice, postcondition)
-      pop()
-      r match
+      require(transitionMap.isDefinedAt(toSink), s"checkTransitionPost(fromSource=$fromSource, toSink=$toSink), " +
+                                                 s"there is no such transition on trace $choices")
+
+      val a = transitionMap(toSink).filter
+              {
+                s => s.source == fromSource &&
+                     s.choice == exitChoice
+              }
+
+      if(Nil == a)
+        sys.error(s"there is no transition fromSource:$fromSource")
+      else
       {
-        case Success(b) => b
-        case _          => sys.error("at TraceAnalyzer.checkPost solver fail")
+        val t = a.head
+        val indexedPre = tracePredicates(fromSource).indexedBy{ case _ => 0 }
+        val indexedPost = tracePredicates(toSink).indexedBy{ case SSymbol(x) => t.effect.lastIndexMap.getOrElse(x, 0) }
+        psksvp.checkPost(indexedPre, t.effect.term, indexedPost)
       }
     }
 
@@ -105,14 +118,13 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
     {
       println("------------------safeBackEdges")
       println(s"candidate pairs $repetitionsPairs")
-      val newBackEdges = for((i, j) <- repetitionsPairs;
-                             x1 = tracePredicates(j).unIndexed;
-                             x2 = tracePredicates(i + 1).unIndexed
-                             if checkPost( x1, j, choices(i), x2)) yield
-                             {
-                               println(s"new backedge found from $j to ${i + 1} with choice $i")
-                               (j ~> (i + 1))(choices(i))
-                             }
+      val newBackEdges = for((i, j) <- repetitionsPairs; if checkTransitionPost(fromSource = j,
+                                                                                toSink = i + 1,
+                                                                                exitChoice = choices(i))) yield
+                         {
+                           println(s"new backedge found from $j to ${i + 1} with choice($i) exitValue is ${choices(i)}")
+                           (j ~> (i + 1))(choices(i))
+                         }
 
       println("----------------------")
       newBackEdges
@@ -122,45 +134,14 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
       linearAutomaton
     else
       NFA(linearAutomaton.getInit,
-             linearAutomaton.transitions ++ backEdges,
-             linearAutomaton.accepting,
-             linearAutomaton.accepting)
+          linearAutomaton.transitions ++ backEdges,
+          linearAutomaton.accepting,
+          linearAutomaton.accepting)
 
   }
 
-  //////////////////////////////////////////
-  // check post specific to this trace only.
-  def checkTransitionPost(fromSource:Int, toSink:Int):Boolean =
-  {
-    require(transitionMap.isDefinedAt(toSink), s"checkTransitionPost(fromSource=$fromSource, toSink=$toSink), " +
-                                               s"there is no such transition on trace $choices")
-
-    val t = transitionMap(toSink)
-
-
-    false
-  }
 
   /////////////////////////////////////////
-  /// combined term in each block
-  lazy val blockTerms:Seq[TypedTerm[BoolTerm, Term]] = function.traceToTerms(trace)
-
-  /// variables in each block
-  lazy val blockVariables:Seq[Set[SortedQId]] = blockTerms.map(_.typeDefs)
-
-  /// variables used across block
-  lazy val commonVariables:Set[SortedQId] =
-  {
-    val s = for(i <- blockVariables.indices;
-                j <- blockVariables.indices if i != j) yield blockVariables(i) intersect blockVariables(j)
-    s.reduce(_ union _)
-  }
-
-  lazy val blockInstructionTerms:Seq[Seq[Term]] = for(term <- blockTerms) yield term.aTerm match
-                                                  {
-                                                    case AndTerm(t, ts) => t :: ts
-                                                    case _              => Nil
-                                                  }
 }
 
 object TraceAnalyzer
@@ -177,5 +158,10 @@ object TraceAnalyzer
   {
     val preconditionIndex:Int = source //precondition index of this transition
     val locationIndex:Int = sink //location index  where this transition contributes its post
+
+    override def toString:String =
+    {
+      s"\n/*----------------*/\nsource:$source\nexitChoice:$choice\nsink:$sink\neffect:${termAsInfix(effect.term)}\n"
+    }
   }
 }

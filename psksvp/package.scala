@@ -1,14 +1,14 @@
 import au.edu.mq.comp.smtlib.configurations.SolverConfig
 import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
 
+import scala.collection.parallel.immutable.ParVector
+
 /**
   * Created by psksvp on 14/2/17.
   */
 package object psksvp
 {
-  import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax.{Sat, UnKnown}
-  import scala.util.Failure
-  import scala.util.Try
+  import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax.Sat
   import au.edu.mq.comp.smtlib.theories.{Core, IntegerArithmetics}
   import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax.Term
   import au.edu.mq.comp.smtlib.theories.BoolTerm
@@ -27,7 +27,6 @@ package object psksvp
   type BooleanTerm = TypedTerm[BoolTerm, Term]
   type AbstractDomain = Seq[Int]
 
-  var satHitCounter = 0
   /**
     *
     * @param term
@@ -40,10 +39,9 @@ package object psksvp
     val result = isSat(term) match
                  {
                    case Success(s) => s
-                   case _          => sys.error(s"psksvp.satisfiableCheck of terms $term solver returns fail")
+                   case _          => sys.error(s"psksvp.satisfiableCheck of terms ${psksvp.termAsInfix(term)} solver returns fail")
                  }
     pop()
-    satHitCounter = satHitCounter + 1
     result
   }
 
@@ -75,19 +73,27 @@ package object psksvp
     */
   def checkPost(p:BooleanTerm, e:BooleanTerm, q:BooleanTerm)
                (implicit solver:SMTLIBInterpreter):Boolean = satisfiableCheck(p & e & !q) match
+                                                             {
+                                                               case Sat()   => false
+                                                               case UnSat() => true
+                                                               case _       => false
+                                                             }
+
+  def termAsInfix[A](terms:Seq[TypedTerm[A, Term]]):String =
   {
-    case Sat()   => false
-    case UnSat() => true
-    case _       => false
+    if(terms.nonEmpty)
+    {
+      val ls = for (t <- terms) yield termAsInfix(t)
+      ls.reduceLeft(_ + ",\n" + _)
+    }
+    else
+      "termAsInfix arg is an empty list"
   }
   /**
     *
     */
   def termAsInfix[A](term: TypedTerm[A, Term]):String=
   {
-    /**
-      *
-      */
     object InfixSMTLibTermPrettyPrinter extends au.edu.mq.comp.smtlib.parser.SMTLIB2PrettyPrinter
     {
       import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax._
@@ -192,16 +198,25 @@ package object psksvp
   {
     case Nil       => sys.error("psksvp.CNF, Nil list was passed")
     case l :: Nil  => l.reduce(_ | _)
-    case l :: rest => l.reduce(_ | _) & toCNF(rest)  // conjunt them
+    case l :: rest => l.reduce(_ | _) & toCNF(rest)  // conjunct them
   }
 
   def toDNF(s:List[List[BooleanTerm]]):BooleanTerm = s match
   {
     case Nil       => sys.error("psksvp.CNF, Nil list was passed")
     case l :: Nil  => l.reduce(_ & _)
-    case l :: rest => l.reduce(_ & _) | toDNF(rest)  // conjunt them
+    case l :: rest => l.reduce(_ & _) | toDNF(rest)  // disjunct them
   }
 
+  def toCNF2(s:List[List[BooleanTerm]]):BooleanTerm =
+  {
+    val disjunctTerms = ParVector.range(0, s.length).map
+                        {
+                          l => s(l).reduce(_ | _)
+                        }
+
+    disjunctTerms.reduce(_ & _)
+  }
 
   /**
     *
@@ -222,6 +237,7 @@ package object psksvp
     */
   def binaryString(n:Int, bits:Int):String=
   {
+    require(bits > 0, "psksvp.binaryString arg bit must be > 0")
     require(n >= 0, s"psksvp.binaryString($n, $bits) n (1st args) must be >= 0")
     require(n <= Integer.parseInt("1" * bits, 2), s"psksvp.binaryString($n, $bits) $bits bits is too small for $n ")
     val format = "%" + bits + "s"
@@ -241,9 +257,10 @@ package object psksvp
   def toFile(code:String, fileExt:String = ".c"):String=
   {
     import java.io.PrintWriter
-    val tmpDir = System.getProperty("java.io.tmpdir")
+    var tmpDir = System.getProperty("java.io.tmpdir")
+    if(tmpDir.last != '/') tmpDir = tmpDir + "/"
     val file = scala.util.Random.alphanumeric.take(10).mkString
-    val fileName =  tmpDir + file + fileExt
+    val fileName = tmpDir + file + fileExt
     new PrintWriter(fileName)
     {
       write(code)
@@ -251,4 +268,5 @@ package object psksvp
     }
     fileName
   }
+
 }
