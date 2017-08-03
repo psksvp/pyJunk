@@ -6,6 +6,8 @@ import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax.{SSymbol, Term}
 import au.edu.mq.comp.smtlib.theories.BoolTerm
 import au.edu.mq.comp.smtlib.typedterms.TypedTerm
 import au.edu.mq.comp.automat.auto.NFA
+import au.edu.mq.comp.smtlib.configurations.SMTInit
+import au.edu.mq.comp.smtlib.configurations.SMTOptions.INTERPOLANTS
 import logics._
 import au.edu.mq.comp.smtlib.typedterms.Commands
 import au.edu.mq.comp.smtlib.interpreters.Resources
@@ -67,9 +69,10 @@ object PredicatesAbstraction
       if(Nil == usePredicates || genPredicates)
       {
         //val solver = solverPool.getWorker()
-        val solver = new SMTLIBInterpreter(solverFromName("Z3"))
+        val solver = new SMTLIBInterpreter(solverFromName("Z3"))//, new SMTInit(List(INTERPOLANTS)))
         val ph = new EQEPredicatesHarvester(traceAnalyzer, functionInformation, solver)
-        usePredicates = ph.inferredWithFilters(BreakOrTerms :: /*ReduceToEqualTerms ::*/ Nil).toSeq
+        //val ph = new InterpolantBasedHarvester(traceAnalyzer, functionInformation, solver)
+        usePredicates = ph.inferredPredicates.toIndexedSeq//ph.inferredWithFilters(/*BreakOrTerms :: ReduceToEqualTerms ::*/ Nil).toSeq
         //solverPool.releaseWorker(solver)
         solver.destroy()
         genPredicates = true
@@ -103,15 +106,12 @@ object PredicatesAbstraction
     {
       if (!simplify)
       {
-        val exprLs = ParVector.range(0, absDomain.length).map
-                     {
-                       i => combinationToDisjunctTerm(absDomain(i), predicates)
-                     }
+        val exprLs =for (i <- absDomain.indices) yield combinationToDisjunctTerm(absDomain(i), predicates)
         exprLs.par.reduce(_ & _)
       }
       else
       {
-        val minTerms = booleanMinimize(absDomain.toList, predicates.toList)
+        val minTerms = booleanMinimizeCache((absDomain, predicates))
         val terms = toCNF(minTerms)
         terms
       }
@@ -141,7 +141,7 @@ object PredicatesAbstraction
       }
       else
       {
-        val minTerms = booleanMinimize(absDomain.toList, predicates.toList)
+        val minTerms = booleanMinimizeCache((absDomain, predicates))
         val terms = toDNF(minTerms)
         terms
       }
@@ -200,6 +200,9 @@ object PredicatesAbstraction
   }
 
 
+  /**
+    *
+    */
   trait TermComposer
   {
     def combinationToTerm(combination: Int, predicates: Seq[BooleanTerm]): BooleanTerm
@@ -209,6 +212,9 @@ object PredicatesAbstraction
               simplify: Boolean): BooleanTerm
   }
 
+  /**
+    *
+    */
   class DNFComposer extends TermComposer
   {
     def combinationToTerm(combination: Int,
@@ -219,6 +225,9 @@ object PredicatesAbstraction
               simplify: Boolean): BooleanTerm = gammaDNF(absDomain, predicates, simplify)
   }
 
+  /**
+    *
+    */
   class CNFComposer extends TermComposer
   {
     def combinationToTerm(combination: Int,
@@ -269,6 +278,8 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
     println("\nFixed point reached with Predicates ===============" )
     result.foreach { t => println(termAsInfix(t))}
     println("------------")
+    val (hits, miss) = psksvp.booleanMinimizeCache.statistic
+    println(s"simplify cache hit is $hits and mis is $miss")
     result
   }
 
@@ -355,34 +366,40 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
       }
 
       /////////////////////////////////////////////
+      /////////////////////////////////////////////
       val absPosts = for(t <- traceAnalyzer.transitionMap(loc)) yield
                      {
                        val usePredicates = predicatesForTransition(t) // use only predicates which lits are in the eff or pre
                        //println(s"usePredicates:${usePredicates.length} <-> inputPredicates:${inputPredicates.length}")
+
                        val combinationSize:Int = Math.pow(2, usePredicates.length).toInt
                        val absDom = for(c <- List.range(0, combinationSize)
                                         if checkCombination(c, t, usePredicates)) yield c
-                       if(usePredicates.length <= 8)
-                         termComposer.gamma(absDom, usePredicates, simplify = true)
-                       else
-                         termComposer.gamma(absDom, usePredicates, simplify = false)
+
+                       termComposer.gamma(absDom, usePredicates, simplify = true)
+                       //termComposer.simplify((absDom, usePredicates))
                      }
       // in each locations, there can be more than one Transitions that need to be abstracted.
       // one is from the direct edge from previous location.
       // another may be from incomming edges from repeat location (back edges).
       // absPost of these transition of the same location are combined (union) together.
-      absPosts.reduce(_ | _) // union all post at this location (loc)
+      //psksvp.printrc(0, loc, "E")
+      val re = absPosts.reduce(_ | _) // union all post at this location (loc)
+      //psksvp.printrc(0, loc, "F")
+      re
     }
 
     /////////////////////////////////////
     /// compute abstraction at each location
     /// NOTE: we start from loc 1, because loc 0 is always True.
+    //ADT.ANSI.clearScreen()
     val rls = ParVector.range(1, currentPredicates.length).map
               {
                 loc => (loc, nextPredicateAtLocation(loc))
               }
 
     //updating the each location with new abstracted post if changes from last run
+    //psksvp.printrc(3, 0, "MM")
     val newPredicates = for((loc, term) <- rls) yield
                         {
                           if (equivalence(term, currentPredicates(loc))(solverArray(loc)))
@@ -390,7 +407,7 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
                           else
                             term | currentPredicates(loc)
                         }
-
+    //psksvp.printrc(3, 0, "NN")
     // the first loc is always true.
     True() +: newPredicates.toIndexedSeq
   }

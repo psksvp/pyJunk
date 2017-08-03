@@ -109,10 +109,10 @@ object Z3QE extends QuantifierElimination
                Raw("(apply (using-params qe :qe-nonlinear false))")
     push()
     val m = eval(cmds.toList) match
-    {
-      case Success(respond)  => makeTerms(parseForTermsAsString(respond))
-      case _                 => sys.error("eval Fail")
-    }
+            {
+              case Success(respond)  => makeTerms(parseForTermsAsString(respond))
+              case _                 => sys.error("eval Fail at Z3QE")
+            }
     pop()
     m
   }

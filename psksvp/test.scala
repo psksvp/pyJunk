@@ -44,7 +44,7 @@ object test
 {
   def main(args: Array[String]): Unit =
   {
-    test5()
+    test61()
   }
 
   def testCheckPost():Unit=
@@ -52,9 +52,18 @@ object test
     val i = Ints("i")
     val j = Ints("j")
 
-    val solver = new SMTLIBInterpreter(solverFromName("Z3"))
-    println(checkPost(i > 0 & j > 0, i === j + 1, i >= 1 & j > 0)(solver))
-    solver.destroy()
+    val m = i < j
+    val k = i < j
+
+    val h = List(m, k)
+    val g = List(k, m)
+
+    println(h == g)
+
+
+//    val solver = new SMTLIBInterpreter(solverFromName("Z3"))
+//    println(checkPost(i > 0 & j > 0, i === j + 1, i >= 1 & j > 0)(solver))
+//    solver.destroy()
   }
 
 
@@ -87,36 +96,36 @@ object test
 
   def testBunchEasy():Unit =
   {
-    val files = List("/home/psksvp/workspace/svcomp/c/loop-acceleration/diamond_false-unreach-call1.c",
+    val files = List(//"/home/psksvp/workspace/svcomp/c/loop-acceleration/diamond_false-unreach-call1.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/diamond_true-unreach-call1.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/diamond_true-unreach-call2.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/functions_true-unreach-call1.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/multivar_false-unreach-call1.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/multivar_false-unreach-call1.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/multivar_true-unreach-call1.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/nested_false-unreach-call1.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/nested_false-unreach-call1.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/nested_true-unreach-call1.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/overflow_true-unreach-call1.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/phases_false-unreach-call1.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/phases_false-unreach-call2.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/phases_false-unreach-call1.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/phases_false-unreach-call2.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/phases_true-unreach-call1.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/phases_true-unreach-call2.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_false-unreach-call1.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_false-unreach-call2.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_false-unreach-call3.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_false-unreach-call4.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_false-unreach-call1.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_false-unreach-call2.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_false-unreach-call3.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_false-unreach-call4.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_true-unreach-call1.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_true-unreach-call2.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_true-unreach-call3.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/simple_true-unreach-call4.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/underapprox_false-unreach-call1.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-acceleration/underapprox_false-unreach-call2.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/underapprox_false-unreach-call1.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-acceleration/underapprox_false-unreach-call2.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/underapprox_true-unreach-call1.c",
                      "/home/psksvp/workspace/svcomp/c/loop-acceleration/underapprox_true-unreach-call2.c",
                      "/home/psksvp/workspace/svcomp/c/loop-invgen/down_true-unreach-call.c",
                      "/home/psksvp/workspace/svcomp/c/loop-invgen/fragtest_simple_true-unreach-call.c",
                      "/home/psksvp/workspace/svcomp/c/loop-invgen/half_2_true-unreach-call.c",
                      "/home/psksvp/workspace/svcomp/c/loop-invgen/id_build_true-unreach-call.c",
-                     "/home/psksvp/workspace/svcomp/c/loop-invgen/id_trans_false-unreach-call.c",
+                     //"/home/psksvp/workspace/svcomp/c/loop-invgen/id_trans_false-unreach-call.c",
                      "/home/psksvp/workspace/svcomp/c/loop-invgen/large_const_true-unreach-call.c",
                      "/home/psksvp/workspace/svcomp/c/loop-invgen/MADWiFi-encode_ie_ok_true-unreach-call.c",
                      "/home/psksvp/workspace/svcomp/c/loop-invgen/nest-if3_true-unreach-call.c",
@@ -128,14 +137,14 @@ object test
                      "/home/psksvp/workspace/svcomp/c/loop-invgen/string_concat-noarr_true-unreach-call.c",
                      "/home/psksvp/workspace/svcomp/c/loops/sum01_bug02_false-unreach-call_true-termination.c",
                      "/home/psksvp/workspace/svcomp/c/loops/sum01_bug02_sum01_bug02_base.c",
-                     "/home/psksvp/workspace/svcomp/c/loops/sum01_false-unreach-call_true-termination.c",
+                     //"/home/psksvp/workspace/svcomp/c/loops/sum01_false-unreach-call_true-termination.c",
                      "/home/psksvp/workspace/svcomp/c/loops/sum01_true-unreach-call_true-termination.c",
-                     "/home/psksvp/workspace/svcomp/c/loops/sum03_false-unreach-call_true-termination.c",
+                     //"/home/psksvp/workspace/svcomp/c/loops/sum03_false-unreach-call_true-termination.c",
                      "/home/psksvp/workspace/svcomp/c/loops/sum03_true-unreach-call_false-termination.c",
-                     "/home/psksvp/workspace/svcomp/c/loops/sum04_false-unreach-call_true-termination.c",
+                     //"/home/psksvp/workspace/svcomp/c/loops/sum04_false-unreach-call_true-termination.c",
                      "/home/psksvp/workspace/svcomp/c/loops/sum04_true-unreach-call_true-termination.c",
-                     "/home/psksvp/workspace/svcomp/c/loops/trex01_true-unreach-call.c",
-                     "/home/psksvp/workspace/svcomp/c/loops/trex02_false-unreach-call_true-termination.c")
+                     "/home/psksvp/workspace/svcomp/c/loops/trex01_true-unreach-call.c")
+                     //"/home/psksvp/workspace/svcomp/c/loops/trex02_false-unreach-call_true-termination.c")
 
     runBunch(files, true, "clang-4.0")
   }
@@ -158,6 +167,8 @@ object test
 
     for(t <- d)
       println(termAsInfix(t) + ", " + t.typeDefs)
+
+
 
 //    val p0 = Bools("p0")
 //    val p1 = Bools("p1")
@@ -221,7 +232,7 @@ object test
     """.stripMargin
 
     runSkink(toFile(code),
-               List(i >= 1, i <= 1000, !(i === 1001)),
+               Nil, //List(i >= 1, i <= 1000, !(i === 1001)),
                useO2 = false,
                usePredicateAbstraction = true,
                useClang = "clang-3.7")
@@ -487,7 +498,7 @@ object test
     runSkink(toFile(code),
               Nil, //List(n > 0, y === x, x === n, y === n, x < n),
               useO2 = false,
-              usePredicateAbstraction = true,
+              usePredicateAbstraction = false,
               useClang = "clang-3.7")
   }
 
@@ -623,10 +634,10 @@ object test
                 """.stripMargin
 
     runSkink(toFile(code),
-              List( x >= 0, x <= 1000, a === 1000, a === x, a === x - 1, x === 1001),
-              useO2 = true,
+              List( x >= 0, a === 0, x <= 1000, a === 1000, a === x, a === x - 1, x === 1001),
+              useO2 = false,
               usePredicateAbstraction = true,
-              useClang = "clang-4.0")
+              useClang = "clang-3.7")
   }
   def test71(): Unit =
   {
@@ -691,9 +702,9 @@ object test
                 """.stripMargin
 
     runSkink(toFile(code),
-              List( x >= 1, x <= 10, a === 0, a === 55, a === ((x * x) / 2) - (x / 2), x === 11),
+              Nil, //List( x >= 1, x <= 10, a === 0, a === 55, a === ((x * x) / 2) - (x / 2), x === 11),
               useO2 = false,
-              usePredicateAbstraction = true,
+              usePredicateAbstraction = false,
               useClang = "clang-3.7")
   }
 
@@ -1148,6 +1159,99 @@ object test
               Nil, //List(n >= 1 & n <= 1000, i === 1 & i < n, i === n, sum === 0, sum === ((i * i) / 2) - (i / 2)), //, sum === ((i * i) / 2) - (i / 2)),
               useO2 = true,
               usePredicateAbstraction = false,
+              useClang = "clang-4.0")
+  }
+
+  def test18():Unit =
+  {
+    // pred with auto gen works, 3 iters with only one
+    // interpol works
+    val code =
+      """
+        |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+        |
+        |extern void __VERIFIER_assume(int);
+        |void __VERIFIER_assert(int cond) {
+        |  if (!(cond)) {
+        |    ERROR: __VERIFIER_error();
+        |  }
+        |  return;
+        |}
+        |int __VERIFIER_nondet_int();
+        |_Bool __VERIFIER_nondet_bool();
+        |
+        |int main()
+        |{
+        |    int x=__VERIFIER_nondet_int();
+        |    int y=__VERIFIER_nondet_int();
+        |    int z=__VERIFIER_nondet_int();
+        |    __VERIFIER_assume(x<100);
+        |    __VERIFIER_assume(x>-100);
+        |    __VERIFIER_assume(z<100);
+        |    __VERIFIER_assume(z>-100);
+        |    while(x<100 && 100<z)
+        |    {
+        |        _Bool tmp=__VERIFIER_nondet_bool();
+        |        if (tmp) {
+        |            x++;
+        |        } else {
+        |            x--;
+        |            z--;
+        |        }
+        |    }
+        |
+        |    __VERIFIER_assert(x>=100 || z<=100);
+        |
+        |    return 0;
+        |}
+      """.stripMargin
+
+    runSkink(toFile(code),
+              Nil,
+              useO2 = true,
+              usePredicateAbstraction = true,
+              useClang = "clang-4.0")
+  }
+
+  def test19():Unit=
+  {
+    val code =
+      """
+        |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+        |
+        |void __VERIFIER_assert(int cond) {
+        |  if (!(cond)) {
+        |    ERROR: __VERIFIER_error();
+        |  }
+        |  return;
+        |}
+        |unsigned int __VERIFIER_nondet_uint();
+        |_Bool __VERIFIER_nondet_bool();
+        |
+        |int main()
+        |{
+        |  unsigned int x1=__VERIFIER_nondet_uint(), x2=__VERIFIER_nondet_uint(), x3=__VERIFIER_nondet_uint();
+        |  unsigned int d1=1, d2=1, d3=1;
+        |  _Bool c1=__VERIFIER_nondet_bool(), c2=__VERIFIER_nondet_bool();
+        |
+        |  while(x1>0 && x2>0 && x3>0)
+        |  {
+        |    if (c1) x1=x1-d1;
+        |    else if (c2) x2=x2-d2;
+        |    else x3=x3-d3;
+        |    c1=__VERIFIER_nondet_bool();
+        |    c2=__VERIFIER_nondet_bool();
+        |  }
+        |
+        |  __VERIFIER_assert(x1==0 || x2==0 || x3==0);
+        |  return 0;
+        |}
+      """.stripMargin
+
+    runSkink(toFile(code),
+              Nil,
+              useO2 = true,
+              usePredicateAbstraction = true,
               useClang = "clang-4.0")
   }
 }

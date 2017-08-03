@@ -145,6 +145,13 @@ package object psksvp
   }
 
 
+
+  val booleanMinimizeCache = psksvp.ADT.Cache[(Seq[Int], Seq[BooleanTerm]), List[List[BooleanTerm]]]
+                             {
+                               case (minTerms, predicates) => booleanMinimize(minTerms.toList,
+                                                                              predicates.toList)
+                             }
+
   /**
     *
     * @param minTerms
@@ -155,6 +162,11 @@ package object psksvp
                       predicates:List[BooleanTerm]):List[List[BooleanTerm]] =
   {
     import psksvp.QuineMcCluskey._
+
+    val idRand = scala.util.Random.nextInt(100)
+    println("start simplify :" + idRand)
+    println("simplify with minTerms :" + minTerms)
+    println("and predicates :" + termAsInfix(predicates))
 
     val symbols:List[String] = (for(i <- predicates.indices) yield {s"p$i"}).toList
     val symbol2Predicate:Map[String, BooleanTerm] = (symbols zip predicates).toMap
@@ -186,6 +198,7 @@ package object psksvp
 
     val piTable = PITable.solve(primeImplicants, minTerms, symbols)
     val r = piTable.results.map(groupMinTerm(_)).toList
+    println("done simplify id: " + idRand)
     r
   }
 
@@ -267,6 +280,13 @@ package object psksvp
       close()
     }
     fileName
+  }
+
+  def printrc(row:Int, col:Int, s:String):Unit =
+  {
+    import ADT.ANSI._
+    setCursor(row, col)
+    print(s)
   }
 
 }

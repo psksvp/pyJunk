@@ -6,6 +6,8 @@ import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax._
 import au.edu.mq.comp.smtlib.theories.BoolTerm
 import au.edu.mq.comp.smtlib.typedterms.{Commands, QuantifiedTerm, TypedTerm}
 
+import scala.util.{Failure, Success}
+
 
 /**
   * Created by psksvp on 19/5/17.
@@ -33,14 +35,17 @@ trait PredicatesHarvester
 }
 
 
-
-
-/// infer using existential quantifiers elimination
+/**
+  * infer using existential quantifiers elimination
+  * @param traceAnalyzer
+  * @param functionInformation
+  * @param solver
+  */
 class EQEPredicatesHarvester(traceAnalyzer:TraceAnalyzer,
                              functionInformation:FunctionInformation,
                              solver:SMTLIBInterpreter) extends PredicatesHarvester
-                                                               with Commands
-                                                               with QuantifiedTerm
+                                                          with Commands
+                                                          with QuantifiedTerm
 {
   import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax.{ISymbol, SymbolId, Term}
   import au.edu.mq.comp.smtlib.theories.BoolTerm
@@ -49,7 +54,7 @@ class EQEPredicatesHarvester(traceAnalyzer:TraceAnalyzer,
   import scala.util.Success
 
   ///
-  def inferPredicates(blockNo:Int):Seq[TypedTerm[BoolTerm, Term]] =
+  def inferPredicates(blockNo:Int, pre:Option[BooleanTerm] = None):Seq[TypedTerm[BoolTerm, Term]] =
   {
     val (blockEffect, lastIndex) = traceAnalyzer.function.traceBlockEffect(traceAnalyzer.trace,
                                                                            blockNo,
@@ -93,10 +98,11 @@ class EQEPredicatesHarvester(traceAnalyzer:TraceAnalyzer,
     }
     else
     {
-      println("list of variables to quantified over is empty")
+      println("list of variables to quantify over is empty")
       Nil
     }
   }
+
   override def inferredPredicates: Set[BooleanTerm] =
   {
     val r = for(block <- 0 until traceAnalyzer.length - 1) yield inferPredicates(block).toSet
@@ -104,8 +110,50 @@ class EQEPredicatesHarvester(traceAnalyzer:TraceAnalyzer,
   }
 }
 
+//class EQEPredicatesHarvesterWithPrecond(traceAnalyzer:TraceAnalyzer,
+//                                        functionInformation:FunctionInformation,
+//                                        solver:SMTLIBInterpreter) extends EQEPredicatesHarvester
+//                                                                     with Commands
+//                                                                     with QuantifiedTerm
+//{
+//  override def inferredPredicates: Set[BooleanTerm] =
+//  {
+//    val r = for(block <- 0 until traceAnalyzer.length - 1) yield inferPredicates(block).toSet
+//    r.reduce(_ union _)
+//  }
+//}
+
+/**
+  *
+  * @param traceAnalyzer
+  * @param functionInformation
+  * @param solver
+  */
+class InterpolantBasedHarvester(traceAnalyzer:TraceAnalyzer,
+                             functionInformation:FunctionInformation,
+                             solver:SMTLIBInterpreter) extends PredicatesHarvester
+                                                          with Commands
+                                                          with QuantifiedTerm
+{
+  lazy val namedTerms = for((tt, n) <- traceAnalyzer.traceTerms.zipWithIndex) yield tt.named("P" + n)
+
+  override def inferredPredicates: Set[BooleanTerm] =
+  {
+    println("namedTerms")
+    println(psksvp.termAsInfix(namedTerms))
+    val m = getInterpolants(namedTerms.head, namedTerms.tail.head, namedTerms.drop(2) : _*)(solver)
+    m match
+    {
+      case Success(itp) => itp.toSet
+      case _            => sys.error("InterpolantBasedHarvester fail to get interpolants ")
+    }
+  }
+}
 
 
+/**
+  *
+  */
 object BreakOrTerms extends PredicatesFilter
 {
   override def apply(predicates:Set[BooleanTerm]):Set[BooleanTerm] =
@@ -122,6 +170,9 @@ object BreakOrTerms extends PredicatesFilter
   }
 }
 
+/**
+  *
+  */
 object ReduceToEqualTerms extends PredicatesFilter
 {
   override def apply(predicates:Set[BooleanTerm]):Set[BooleanTerm] =
