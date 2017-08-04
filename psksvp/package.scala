@@ -18,7 +18,6 @@ package object psksvp
   import au.edu.mq.comp.smtlib.typedterms.Commands
   import au.edu.mq.comp.smtlib.interpreters.Resources
   object resources extends Resources
-  import resources._
   object Cmds extends Commands
   import Cmds._
   object logics extends IntegerArithmetics with Core
@@ -145,62 +144,86 @@ package object psksvp
   }
 
 
+  /**
+    *
+    * @param minTerms
+    * @param numberOfBits
+    * @param timeout
+    * @param exePath
+    * @return
+    */
+  def espresso(minTerms:Seq[Int],
+               numberOfBits:Int,
+               timeout:Int = 20,
+               exePath:String = "espresso"):String=
+  {
+    import scala.util.{Failure, Success}
+    import scala.concurrent.duration._
+    import org.bitbucket.franck44.expect.Expect
 
-  val booleanMinimizeCache = psksvp.ADT.Cache[(Seq[Int], Seq[BooleanTerm]), List[List[BooleanTerm]]]
+    val table = for(i <- 0 to Integer.parseInt("1" * numberOfBits, 2)) yield
+                {
+                  val bin = psksvp.binaryString(i, numberOfBits)
+                  val out = if (minTerms.indexOf(i) >= 0) "1" else "0"
+                  s"$bin $out \n"
+                }
+
+    val esp = Expect(exePath, Nil)
+    val pla = s"""
+                 |.i $numberOfBits
+                 |.o 1
+                 |${table.reduceLeft(_ + _)}
+                 |.e\n
+               """.stripMargin
+
+    esp.send(pla)
+    val result = esp.expect(".e".r, timeout.minutes)  match
+                 {
+                   case Success(r) => r
+                   case Failure(e) => sys.error(e.toString)
+                   case _          => sys.error("espresso fail ")
+                 }
+    esp.destroy()
+    result
+  }
+
+
+  //////////////
+  /////
+  /////////////
+  import psksvp.ADT.Cache
+  val booleanMinimizeCache = Cache[(Seq[Int], Seq[BooleanTerm]), List[List[BooleanTerm]]]
                              {
                                case (minTerms, predicates) => booleanMinimize(minTerms.toList,
                                                                               predicates.toList)
                              }
 
-  /**
-    *
-    * @param minTerms
-    * @param predicates
-    * @return
-    */
+
   def booleanMinimize(minTerms:List[Int],
                       predicates:List[BooleanTerm]):List[List[BooleanTerm]] =
   {
-    import psksvp.QuineMcCluskey._
 
-    val idRand = scala.util.Random.nextInt(100)
-    println("start simplify :" + idRand)
-    println("simplify with minTerms :" + minTerms)
-    println("and predicates :" + termAsInfix(predicates))
-
-    val symbols:List[String] = (for(i <- predicates.indices) yield {s"p$i"}).toList
-    val symbol2Predicate:Map[String, BooleanTerm] = (symbols zip predicates).toMap
-
-    def groupMinTerm(implicant:Implicant):List[BooleanTerm]=
+    def toBooleanTerms(sl:String):Seq[BooleanTerm] =
     {
-      val weights = symbols.indices.map(1 << _).reverse
-      val varByWeight = (weights zip symbols).toMap
-
-      val varList = for(w <- weights) yield
-                    {
-                      if(!implicant.group.contains(w))
-                      {
-                        val p = symbol2Predicate(varByWeight(w))
-                        if ((implicant.minterm & w) != 0)
-                          p     //varByWeight(w)
-                        else
-                          !p    //varByWeight(w) + "'"
-                      }
-                      else
-                        False()
-                    }
-
-      varList.filter(_ != False()).toList
+      for(i <- predicates.indices if sl(i) != '-') yield
+      {
+        sl(i) match
+        {
+          case '1' => predicates(i)
+          case '0' => !predicates(i)
+        }
+      }
     }
 
-    val implicants = minTerms.sorted.sortBy(bitCount(_)).map(new Implicant(_))
-    val primeImplicants = genImplicants(implicants, symbols.length).filter(_.prime)
+    def valid(line:String):Boolean = line.indexOf(".i") < 0 &&
+                                     line.indexOf(".o") < 0 &&
+                                     line.indexOf(".p") < 0
 
-    val piTable = PITable.solve(primeImplicants, minTerms, symbols)
-    val r = piTable.results.map(groupMinTerm(_)).toList
-    println("done simplify id: " + idRand)
-    r
+    val result = espresso(minTerms, predicates.length)
+    val r = for(line <- result.split("\n") if valid(line)) yield toBooleanTerms(line).toList
+    r.toList
   }
+
 
   /**
     *
