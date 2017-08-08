@@ -111,6 +111,7 @@ object Z3QE extends QuantifierElimination
     val m = eval(cmds.toList) match
             {
               case Success(respond)  => makeTerms(parseForTermsAsString(respond))
+              case Failure(e)        => sys.error(e.toString)
               case _                 => sys.error("eval Fail at Z3QE")
             }
     pop()

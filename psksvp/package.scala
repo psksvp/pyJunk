@@ -2,6 +2,7 @@ import au.edu.mq.comp.smtlib.configurations.SolverConfig
 import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
 
 import scala.collection.parallel.immutable.ParVector
+import scala.util.Failure
 
 /**
   * Created by psksvp on 14/2/17.
@@ -38,6 +39,7 @@ package object psksvp
     val result = isSat(term) match
                  {
                    case Success(s) => s
+                   case Failure(e) => sys.error(s"psksvp.satisfiableCheck of terms ${psksvp.termAsInfix(term)} solver returns ${e.toString}")
                    case _          => sys.error(s"psksvp.satisfiableCheck of terms ${psksvp.termAsInfix(term)} solver returns fail")
                  }
     pop()
@@ -144,85 +146,89 @@ package object psksvp
   }
 
 
-  /**
-    *
-    * @param minTerms
-    * @param numberOfBits
-    * @param timeout
-    * @param exePath
-    * @return
-    */
-  def espresso(minTerms:Seq[Int],
-               numberOfBits:Int,
-               timeout:Int = 20,
-               exePath:String = "espresso"):String=
-  {
-    import scala.util.{Failure, Success}
-    import scala.concurrent.duration._
-    import org.bitbucket.franck44.expect.Expect
-
-    val table = for(i <- 0 to Integer.parseInt("1" * numberOfBits, 2)) yield
-                {
-                  val bin = psksvp.binaryString(i, numberOfBits)
-                  val out = if (minTerms.indexOf(i) >= 0) "1" else "0"
-                  s"$bin $out \n"
-                }
-
-    val esp = Expect(exePath, Nil)
-    val pla = s"""
-                 |.i $numberOfBits
-                 |.o 1
-                 |${table.reduceLeft(_ + _)}
-                 |.e\n
-               """.stripMargin
-
-    esp.send(pla)
-    val result = esp.expect(".e".r, timeout.minutes)  match
-                 {
-                   case Success(r) => r
-                   case Failure(e) => sys.error(e.toString)
-                   case _          => sys.error("espresso fail ")
-                 }
-    esp.destroy()
-    result
-  }
-
-
-  //////////////
-  /////
-  /////////////
-  import psksvp.ADT.Cache
-  val booleanMinimizeCache = Cache[(Seq[Int], Seq[BooleanTerm]), List[List[BooleanTerm]]]
-                             {
-                               case (minTerms, predicates) => booleanMinimize(minTerms.toList,
-                                                                              predicates.toList)
-                             }
-
-
-  def booleanMinimize(minTerms:List[Int],
-                      predicates:List[BooleanTerm]):List[List[BooleanTerm]] =
-  {
-
-    def toBooleanTerms(sl:String):Seq[BooleanTerm] =
-    {
-      for(i <- predicates.indices if sl(i) != '-') yield
-      {
-        sl(i) match
-        {
-          case '1' => predicates(i)
-          case '0' => !predicates(i)
-        }
-      }
-    }
-
-    def valid(line:String):Boolean = line.indexOf(".i") < 0 &&
-                                     line.indexOf(".o") < 0 &&
-                                     line.indexOf(".p") < 0
-
-    val result = espresso(minTerms, predicates.length)
-    val r = for(line <- result.split("\n") if valid(line)) yield toBooleanTerms(line).toList
-    r.toList
-  }
+//  /**
+//    *
+//    * @param minTerms
+//    * @param numberOfBits
+//    * @param timeout
+//    * @param exePath
+//    * @return
+//    */
+//  def espresso(minTerms:Seq[Int],
+//               numberOfBits:Int,
+//               timeout:Int = 20,
+//               exePath:String = "espresso"):String=
+//  {
+//    import scala.util.{Failure, Success}
+//    import scala.concurrent.duration._
+//    import org.bitbucket.franck44.expect.Expect
+//
+//    val table = for(i <- 0 to Integer.parseInt("1" * numberOfBits, 2)) yield
+//                {
+//                  val bin = psksvp.binaryString(i, numberOfBits)
+//                  val out = if (minTerms.indexOf(i) >= 0) "1" else "0"
+//                  s"$bin $out \n"
+//                }
+//
+//    val pla = s"""
+//                 |.i $numberOfBits
+//                 |.o 1
+//                 |${table.reduceLeft(_ + _)}
+//                 |.e\n
+//               """.stripMargin
+//
+//    val esp = Expect(exePath, Nil)
+//    esp.send(pla)
+//    val result = esp.expect(".e".r, timeout.minutes)  match
+//                 {
+//                   case Success(r) => r
+//                   case Failure(e) => sys.error(e.toString)
+//                   case _          => sys.error("espresso fail ")
+//                 }
+//    esp.destroy()
+//    result
+//  }
+//
+//
+//  //////////////
+//  /////
+//  /////////////
+//  import psksvp.ADT.Cache
+//  val booleanMinimizeCache = Cache[(Seq[Int], Seq[BooleanTerm]), List[List[BooleanTerm]]]
+//                             {
+//                               case (minTerms, predicates) => booleanMinimize(minTerms.toList,
+//                                                                              predicates.toList)
+//                             }
+//
+//  def booleanMinimize(minTerms:List[Int],
+//                      predicates:List[BooleanTerm]):List[List[BooleanTerm]] =
+//  {
+//
+//    def toBooleanTerms(sl:String):Seq[BooleanTerm] =
+//    {
+//      for(i <- predicates.indices if sl(i) != '-') yield
+//      {
+//        sl(i) match
+//        {
+//          case '1' => predicates(i)
+//          case '0' => !predicates(i)
+//        }
+//      }
+//    }
+//
+//    def valid(line:String):Boolean = line.indexOf(".i") < 0 &&
+//                                     line.indexOf(".o") < 0 &&
+//                                     line.indexOf(".p") < 0
+//
+//    def run:List[List[BooleanTerm]]=
+//    {
+//      val result = espresso(minTerms, predicates.length)
+//      val r = for (line <- result.split("\n") if valid(line)) yield toBooleanTerms(line).toList
+//      r.toList
+//    }
+//
+//    run
+//  }
 
 
   /**
@@ -244,15 +250,6 @@ package object psksvp
     case l :: rest => l.reduce(_ & _) | toDNF(rest)  // disjunct them
   }
 
-  def toCNF2(s:List[List[BooleanTerm]]):BooleanTerm =
-  {
-    val disjunctTerms = ParVector.range(0, s.length).map
-                        {
-                          l => s(l).reduce(_ | _)
-                        }
-
-    disjunctTerms.reduce(_ & _)
-  }
 
   /**
     *

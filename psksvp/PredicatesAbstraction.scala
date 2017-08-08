@@ -111,7 +111,7 @@ object PredicatesAbstraction
       }
       else
       {
-        val minTerms = booleanMinimizeCache((absDomain, predicates))
+        val minTerms = BooleanMinimize(absDomain, predicates)
         val terms = toCNF(minTerms)
         terms
       }
@@ -141,7 +141,7 @@ object PredicatesAbstraction
       }
       else
       {
-        val minTerms = booleanMinimizeCache((absDomain, predicates))
+        val minTerms = BooleanMinimize(absDomain, predicates)
         val terms = toDNF(minTerms)
         terms
       }
@@ -278,7 +278,7 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
     println("\nFixed point reached with Predicates ===============" )
     result.foreach { t => println(termAsInfix(t))}
     println("------------")
-    val (hits, miss) = psksvp.booleanMinimizeCache.statistic
+    val (hits, miss) = BooleanMinimize.cacheStatistic
     println(s"simplify cache hit is $hits and mis is $miss")
     result
   }
@@ -377,16 +377,12 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
                                         if checkCombination(c, t, usePredicates)) yield c
 
                        termComposer.gamma(absDom, usePredicates, simplify = true)
-                       //termComposer.simplify((absDom, usePredicates))
                      }
       // in each locations, there can be more than one Transitions that need to be abstracted.
       // one is from the direct edge from previous location.
       // another may be from incomming edges from repeat location (back edges).
       // absPost of these transition of the same location are combined (union) together.
-      //psksvp.printrc(0, loc, "E")
-      val re = absPosts.reduce(_ | _) // union all post at this location (loc)
-      //psksvp.printrc(0, loc, "F")
-      re
+      absPosts.reduce(_ | _) // union all post at this location (loc)
     }
 
     /////////////////////////////////////
