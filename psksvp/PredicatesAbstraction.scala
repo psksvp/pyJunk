@@ -22,7 +22,6 @@ import scala.collection.parallel.immutable.ParVector
  */
 
 
-
 /**
   * ***************************************************************************
   * ***************************************************************************
@@ -69,6 +68,7 @@ object PredicatesAbstraction
       if(Nil == usePredicates || genPredicates)
       {
         //val solver = solverPool.getWorker()
+        println("generating predicates for abstraction")
         val solver = new SMTLIBInterpreter(solverFromName("Z3"))//, new SMTInit(List(INTERPOLANTS)))
         val ph = new EQEPredicatesHarvester(traceAnalyzer, functionInformation, solver)
         //val ph = new InterpolantBasedHarvester(traceAnalyzer, functionInformation, solver)
@@ -111,9 +111,7 @@ object PredicatesAbstraction
       }
       else
       {
-        val minTerms = BooleanMinimize(absDomain, predicates)
-        val terms = toCNF(minTerms)
-        terms
+        BooleanMinimizeCNF(absDomain.toList, predicates.toList)
       }
     }
   }
@@ -141,9 +139,7 @@ object PredicatesAbstraction
       }
       else
       {
-        val minTerms = BooleanMinimize(absDomain, predicates)
-        val terms = toDNF(minTerms)
-        terms
+        BooleanMinimizeDNF(absDomain.toList, predicates.toList)
       }
     }
   }
@@ -278,7 +274,7 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
     println("\nFixed point reached with Predicates ===============" )
     result.foreach { t => println(termAsInfix(t))}
     println("------------")
-    val (hits, miss) = BooleanMinimize.cacheStatistic
+    val (hits, miss) = BooleanMinimizeCNF.cacheStatistic
     println(s"simplify cache hit is $hits and mis is $miss")
     result
   }
@@ -380,22 +376,20 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
                      }
       // in each locations, there can be more than one Transitions that need to be abstracted.
       // one is from the direct edge from previous location.
-      // another may be from incomming edges from repeat location (back edges).
-      // absPost of these transition of the same location are combined (union) together.
+      // another may be from incomming edges from repeat locations (back edges).
+      // absPost of these transitions at the same location are combined (union) together.
       absPosts.reduce(_ | _) // union all post at this location (loc)
     }
 
     /////////////////////////////////////
     /// compute abstraction at each location
     /// NOTE: we start from loc 1, because loc 0 is always True.
-    //ADT.ANSI.clearScreen()
     val rls = ParVector.range(1, currentPredicates.length).map
               {
                 loc => (loc, nextPredicateAtLocation(loc))
               }
 
     //updating the each location with new abstracted post if changes from last run
-    //psksvp.printrc(3, 0, "MM")
     val newPredicates = for((loc, term) <- rls) yield
                         {
                           if (equivalence(term, currentPredicates(loc))(solverArray(loc)))
@@ -403,7 +397,6 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
                           else
                             term | currentPredicates(loc)
                         }
-    //psksvp.printrc(3, 0, "NN")
     // the first loc is always true.
     True() +: newPredicates.toIndexedSeq
   }

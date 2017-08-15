@@ -4,6 +4,7 @@ import au.edu.mq.comp.skink.ir.llvm.LLVMFunction
 
 /**
   * Created by psksvp on 23/6/17.
+  * FunctionInformation is specific to LLVMFunction (LLVM Ir instruction)
   */
 case class FunctionInformation(function: LLVMFunction)
 {

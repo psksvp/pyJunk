@@ -25,7 +25,7 @@ trait PredicatesHarvester
 
   def inferredWithFilters(filters:Seq[PredicatesFilter]):Set[BooleanTerm] =
   {
-    var p = inferredPredicates
+    var p = inferredPredicates  // state change
     for(f <- filters)
     {
       p = f(p)
@@ -86,13 +86,14 @@ class EQEPredicatesHarvester(traceAnalyzer:TraceAnalyzer,
     {
       //val indexedPre = pre.indexedBy {case _ => 0}
       val e = SMTLIB.Exists(s.head, s.tail:_*)(blockEffect) //( indexedPre & blockEffect)
-      println(s"exists term:${psksvp.termAsInfix(e)}")
+      //println(s"exists term:${psksvp.termAsInfix(e)}")
 
       psksvp.SMTLIB.Z3QE(e)(solver) match
       {
         case Success(ls) => val r = ls.map { t => t.unIndexed }
-                            println(termAsInfix(r))
+                            //println(termAsInfix(r))
                             r
+        case Failure(e)  => sys.error(e.toString)
         case _           => sys.error(s"psksvp.SMTLIB.Z3QE($e) fail")
       }
     }
@@ -150,6 +151,10 @@ class InterpolantBasedHarvester(traceAnalyzer:TraceAnalyzer,
   }
 }
 
+
+
+////////////////////////////////////////////////////////////
+/// SAC to filter the generated predicates
 
 /**
   *

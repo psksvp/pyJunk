@@ -2,24 +2,42 @@ package psksvp
 
 import au.edu.mq.comp.smtlib.theories.{Core, IntegerArithmetics}
 
-object BooleanMinimize extends IntegerArithmetics with Core
+case class BooleanMinimize(termCombinerFunc:List[List[BooleanTerm]] => BooleanTerm) extends IntegerArithmetics with Core
 {
   import psksvp.ADT.Cache
-  private val cache = Cache[(Seq[Int], Seq[BooleanTerm]), List[List[BooleanTerm]]]
+  private val cache = Cache[(Seq[Int], Seq[BooleanTerm]), BooleanTerm]
                       {
                         case (minTerms, predicates) => minimize(minTerms.toList,
                                                                 predicates.toList)
                       }
 
+  /**
+    *
+    * @return
+    */
   def cacheStatistic:(Long, Long) = cache.statistic
 
-  def apply(minTerms:Seq[Int],
-            predicates:Seq[BooleanTerm]):List[List[BooleanTerm]] = cache((minTerms, predicates))
+  /**
+    *
+    * @param minTerms
+    * @param predicates
+    * @return
+    */
+  def apply(minTerms:List[Int],
+               predicates:List[BooleanTerm]):BooleanTerm = cache((minTerms, predicates))
 
+  /**
+    *
+    * @param minTerms
+    * @param predicates
+    * @return
+    */
   def minimize(minTerms:List[Int],
-               predicates:List[BooleanTerm]):List[List[BooleanTerm]] =
+               predicates:List[BooleanTerm]):BooleanTerm =
   {
-
+    // to understand the body of function minimize
+    // look at function espresso for the comment about
+    // espresso's input and out format (pla)
     def toTerms(sl:String):Seq[BooleanTerm] =
     {
       for(i <- predicates.indices if sl(i) != '-') yield
@@ -39,7 +57,7 @@ object BooleanMinimize extends IntegerArithmetics with Core
 
     val result = espresso(minTerms, predicates.length)
     val r = for (line <- result.split("\n") if valid(line)) yield toTerms(line).toList
-    r.toList
+    termCombinerFunc(r.toList)
   }
 
   /**
@@ -73,6 +91,44 @@ object BooleanMinimize extends IntegerArithmetics with Core
                  |.e\n
                """.stripMargin
 
+    /*
+       The pla for minterm List(0, 1, 3, 7, 8, 9, 11, 15) with 4 predicates (p0 ,p1, p2, p3) looks like below.
+       .e indicates the end of input
+
+      -----------------------------
+      .i 4
+      .o 1
+      0000 1
+      0001 1
+      0010 0
+      0011 1
+      0100 0
+      0101 0
+      0110 0
+      0111 1
+      1000 1
+      1001 1
+      1010 0
+      1011 1
+      1100 0
+      1101 0
+      1110 0
+      1111 1
+      .e
+      ------------------------------
+
+      The output is below, which indicates [[!p1, !p2], [p2, p2]]  from -00- and --11
+
+      ------------------------------
+      .i 4
+      .o 1
+      .p 2
+      -00- 1
+      --11 1
+      .e
+      ------------------------------
+      */
+
     val esp = Expect(exePath, Nil)
     esp.send(pla)
     val result = esp.expect(".e".r, timeout.minutes)  match
@@ -84,5 +140,20 @@ object BooleanMinimize extends IntegerArithmetics with Core
     esp.destroy()
     result
   }
+}
 
+/**
+  *
+  */
+object BooleanMinimizeCNF extends BooleanMinimize(toCNF)
+{
+  override def apply(minTerms:List[Int], predicates:List[BooleanTerm]):BooleanTerm = super.apply(minTerms, predicates)
+}
+
+/**
+  *
+  */
+object BooleanMinimizeDNF extends BooleanMinimize(toDNF)
+{
+  override def apply(minTerms:List[Int], predicates:List[BooleanTerm]):BooleanTerm = super.apply(minTerms, predicates)
 }

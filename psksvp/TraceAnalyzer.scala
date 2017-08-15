@@ -1,3 +1,8 @@
+/**
+  Put updating history here
+*/
+
+
 package psksvp
 
 import au.edu.mq.comp.automat.auto.NFA
@@ -31,16 +36,22 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
   lazy val trace:Trace = Trace(choices)
   lazy val traceTerms:Seq[BooleanTerm] = function.traceToTerms(trace)
   //////////////////////////////////////////////////
+  // compute repetitionsPairs
+  //////////////////////////////////////////////////
   lazy val repetitionsPairs:Seq[(Int, Int)] =
   {
     val indexPartition: Seq[Seq[Int]] = function.traceToRepetitions(trace)
     indexPartition.filter(_.size > 1).map(_.toList).map(generatePairs(_)).flatten.flatten
   }
 
-  //////////////////////////////////////////////////
+  ////////////////////////////////////////////////////////////////////////////////////////////////////
+  // The key is location index (Int)
+  // The value is the list  of Transition object
+  // @see case class Transition(source:Int, sink:Int, choice:Int, effect:BlockEffect) in companion object
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
   lazy val transitionMap:Map[Int, List[Transition]] =
   {
-    // start from 1 because, l0 is always true
+    // start from 1 because, 0 is always true
     val linear = for (l <- 1 until choices.length) yield
                  {
                    // pre compute the effect here is ok, because I use the effect to do checkPost only.
