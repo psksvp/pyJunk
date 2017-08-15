@@ -1,5 +1,7 @@
 import au.edu.mq.comp.smtlib.configurations.SolverConfig
 import au.edu.mq.comp.smtlib.interpreters.SMTLIBInterpreter
+
+import scala.concurrent.duration.Duration
 import scala.util.Failure
 
 /**
@@ -228,14 +230,13 @@ package object psksvp
     Seq("cp", path, s"$toDir/.").!!
   }
 
-  def runWithTimeout[T](timeout:Long, defaultReturn:T)(f: => T):T =
+  def runWithTimeout[T](timeout:Duration, defaultReturn:T)(f: => T):T =
   {
     import scala.concurrent.{Await, Future}
-    import scala.concurrent.duration._
     import scala.concurrent.ExecutionContext.Implicits.global
     try
     {
-      Await.result(Future[T](f), timeout.minutes)
+      Await.result(Future[T](f), timeout)
     }
     catch
     {

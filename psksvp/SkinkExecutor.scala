@@ -2,6 +2,7 @@ package psksvp
 
 object SkinkExecutor
 {
+  import scala.concurrent.duration.Duration
   /**
     *
     * @param filename
@@ -30,6 +31,13 @@ object SkinkExecutor
     Main.main(args.filter(_.length > 0).toArray)
   }
 
+
+  abstract class RunResult
+  case class RunTRUE() extends RunResult
+  case class RunFALSE() extends RunResult
+  case class RunUNKNOWN() extends RunResult
+  case class RunTIMEOUT() extends RunResult
+
   /**
     *
     * @param filename
@@ -45,7 +53,7 @@ object SkinkExecutor
           useO2:Boolean,
           usePredicateAbstraction:Boolean,
           useClang:String = "clang-4.0",
-          maxIteration:Int = 20):String=
+          maxIteration:Int = 20): RunResult=
   {
     import java.io.{PrintStream, File}
     val outputFile = new File(filename + ".output.txt")
@@ -54,8 +62,10 @@ object SkinkExecutor
       consoleRun(filename, predicates, useO2, usePredicateAbstraction, useClang)
     }
     import sys.process._
-    val result = Seq("/usr/bin/tail", "-n", "2", filename + ".output.txt").!!
-    result.trim
+    val result = Seq("/usr/bin/tail", "-n", "1", filename + ".output.txt").!!
+    if(result.trim.indexOf("TRUE") >= 0) RunTRUE()
+    else if(result.trim.indexOf("FALSE") >= 0) RunFALSE()
+    else RunUNKNOWN()
   }
 
   /**
@@ -86,7 +96,7 @@ object SkinkExecutor
     * @param useClang
     * @param maxIteration
     */
-  case class VerifyCode(filePath:String, useO2:Boolean, useClang:String, maxIteration:Int)
+  case class Code(filePath:String, useO2:Boolean, useClang:String, maxIteration:Int)
 
   /**
     *
@@ -95,21 +105,22 @@ object SkinkExecutor
     * @param outputDir
     * @return
     */
-  def runBench(runDataList:Seq[VerifyCode], timeout:Long, outputDir:String):Seq[Seq[String]] =
+  def runBench(runDataList:Seq[Code], timeout:Duration, outputDir:String):Seq[Seq[String]] =
   {
     for(d <- runDataList) yield
     {
-      val result = runWithTimeout(timeout, "timeout")
+      println(s"running -> $d")
+      val result = runWithTimeout[RunResult](timeout, RunTIMEOUT())
       {
         run(d.filePath, Nil, d.useO2, true, d.useClang, d.maxIteration)
       }
       copyFile(d.filePath, outputDir)
-      copyFile(d.filePath.replace("*.c", ".ll"), outputDir)
+      copyFile(d.filePath.replace(".c", ".ll"), outputDir)
       copyFile(s"${d.filePath}.output.txt", outputDir)
       Seq(d.filePath.split("/").last,
-          d.filePath.replace("*.c", ".ll").split("/").last,
+          d.filePath.replace(".c", ".ll").split("/").last,
           s"${d.filePath}.output.txt".split("/").last,
-          result)
+          result.toString())
     }
   }
 
@@ -119,7 +130,7 @@ object SkinkExecutor
     * @param timeout
     * @param outputDir
     */
-  def runBenchOutputReport(runDataList:Seq[VerifyCode], timeout:Long, outputDir:String):Unit =
+  def runBenchAndOutputReport(runDataList:Seq[Code], timeout:Duration, outputDir:String):Unit =
   {
     val output = runBench(runDataList, timeout, outputDir)
     val report = makeReportHTML(output)
@@ -144,9 +155,8 @@ object SkinkExecutor
       require(4 == r.length)
       s"""
          |<tr>
-         |  <th> <a href="$r(0)"> $r(0) </a> </th>
-         |  <th> <a href="$r(1)"> $r(1) </a> </th>
-         |  <th> <a href="$r(2)"> ${r.last} <a> <th>
+         |  <th> <a href="${r(0)}"> ${r(0)} </a> </th>
+         |  <th> <a href="${r(2)}"> ${r.last} </a> </th>
          |</tr>
        """.stripMargin
     }
@@ -160,9 +170,36 @@ object SkinkExecutor
     }
 
     s"""
-       |<table style="width:100%">
+       |<html>
+       |<head>
+       |<style>
+       |table {
+       |    width:100%;
+       |}
+       |table, th, td {
+       |    border: 1px solid black;
+       |    border-collapse: collapse;
+       |}
+       |th, td {
+       |    padding: 5px;
+       |    text-align: left;
+       |}
+       |table#t01 tr:nth-child(even) {
+       |    background-color: #eee;
+       |}
+       |table#t01 tr:nth-child(odd) {
+       |   background-color:#fff;
+       |}
+       |table#t01 th {
+       |    background-color: black;
+       |    color: white;
+       |}
+       |</style>
+       |</head>
+       |<body><table>
        |${makeTable(output)}
-       |</table>
+       |</body></table>
+       |</html>
      """.stripMargin
   }
 }

@@ -22,7 +22,7 @@ object test
     //test1()
     //test61()
     //test19()
-    testBooleanMinimizeX()
+    testWithReport()
   }
 
   def testEspresso():Unit=
@@ -44,6 +44,30 @@ object test
     val m = BooleanMinimize(toDNF).minimize(List(0, 1, 3, 7, 8, 9, 11, 15),
                                              List(i > 0, i < 0, j > 0, j < 0))
     println(termAsInfix(m))
+  }
+
+
+  def testWithReport():Unit=
+  {
+    import psksvp.SkinkExecutor.Code
+    val baseDir = ""
+    val data = List(Code(baseDir + "/c/loop-acceleration/diamond_true-unreach-call1.c", false, "clang-3.7", 30),
+                    Code(baseDir + "/c/loop-acceleration/diamond_true-unreach-call2.c", false, "clang-3.7", 60),
+                    Code(baseDir + "/c/loop-acceleration/functions_true-unreach-call1.c", false, "clang-3.7", 30),
+                    Code(baseDir + "/c/loop-acceleration/nested_true-unreach-call1.c", false, "clang-3.7", 30),
+                    Code(baseDir + "/c/loop-acceleration/overflow_true-unreach-call1.c", false, "clang-3.7", 30))
+
+    val baseTest = List(Code(toFile(CCode.one), false, "clang-3.7", 30),
+                        Code(toFile(CCode.two), false, "clang-3.7", 30),
+                        Code(toFile(CCode.three), false, "clang-3.7", 30),
+                        Code(toFile(CCode.four), false, "clang-3.7", 30),
+                        Code(toFile(CCode.five), false, "clang-3.7", 30),
+                        Code(toFile(CCode.six), false, "clang-3.7", 30),
+                        Code(toFile(CCode.seven), false, "clang-3.7", 30)
+                       )
+
+    import scala.concurrent.duration._
+    SkinkExecutor.runBenchAndOutputReport(baseTest, 30.minutes, "/home/psksvp/workspace/output")
   }
 
 
