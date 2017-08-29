@@ -23,34 +23,9 @@ object test
     //test61()
     //test19()
     //testWithReport()
-    //testContains()
-    testReduceToSuperSet()
   }
 
-  def testReduceToSuperSet():Unit =
-  {
-    val i = Ints("i")
-    val j = Ints("j")
-    val a:Set[PredicateTerm] = Set(i > 0, i > 1, j > -10, j > 0, j > -50 | i > -50)
-    val r = psksvp.ReduceToSuperSetTerms(a)
-    println(termAsInfix(r.toSeq))
-  }
 
-  def testContains():Unit=
-  {
-    val i = Ints("i")
-    val j = Ints("j")
-    val p1 = i >= 10
-    val p2 = i >= 5
-    val p3 = j > 0 & i >= 0
-
-    val solver = new SMTLIBInterpreter(solverFromName("Z3"))
-    println(subsetCheck(p1, p2)(solver))
-    println(subsetCheck(p2, p1)(solver))
-    println(subsetCheck(p1, p3)(solver))
-    println(subsetCheck(p3, p1)(solver))
-    solver.destroy()
-  }
 
   def testEspresso():Unit=
   {
@@ -176,69 +151,6 @@ object test
                      "/home/psksvp/workspace/svcomp/c/loops/trex01_true-unreach-call.c")
                      //"/home/psksvp/workspace/svcomp/c/loops/trex02_false-unreach-call_true-termination.c")
   }
-
-
-  def testDNF(): Unit =
-  {
-    import scala.util.{Try, Success}
-    import au.edu.mq.comp.smtlib.interpreters.Resources
-    object resources extends Resources
-    import resources._
-
-    val a = Ints("a")
-    val b = Ints("b")
-    val c = a > 0 | b < 10 | a === b
-
-    val d = psksvp.SMTLIB.breakOrTerm(c.typeDefs, c.termDef)
-
-    println(termAsInfix(d))
-
-    for(t <- d)
-      println(termAsInfix(t) + ", " + t.typeDefs)
-
-
-
-//    val p0 = Bools("p0")
-//    val p1 = Bools("p1")
-//    val dnf = (!p0 & !p1) | (!p0 & p1) | (p0 & !p1) | (p0 & p1)
-//    val cnf = (!p0 | !p1) & (!p0 | p1) & (p0 | !p1) & (p0 | p1)
-//    val r = using[Boolean](new SMTLIBInterpreter(solverFromName("Z3")))
-//      {
-//        implicit solver =>
-//          println(equivalence(True(), dnf))
-//          println(equivalence(False(), cnf))
-//
-//          Success(true)
-//      }
-  }
-
-  def testQE(): Unit =
-  {
-    object qt extends QuantifiedTerm
-    import qt._
-
-    val b = Ints("b")
-    val c = b.indexed(1) == b.indexed(2)
-    println(s"-------> $c")
-
-    val a = Ints("a").indexed(1)
-    val cmp = Bools("cmp")
-    val five = Ints("five")
-    val ex = SMTLIB.Exists(five.symbol, cmp.symbol)
-    {
-      five === a & cmp === (five < 1000) & True() === cmp
-    }
-
-
-    val solver = new SMTLIBInterpreter(solverFromName("Z3"))
-    psksvp.SMTLIB.Z3QE(ex)(solver) match
-    {
-      case Success(r) => for (t <- r) println(termAsInfix(t))
-      case _ => println("not good")
-    }
-    solver.destroy()
-  }
-
 
   def test1(): Unit =
   {
