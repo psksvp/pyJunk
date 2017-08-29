@@ -33,8 +33,8 @@ object PredicatesAbstraction
   var timeUsedWhole: Long = 0
   var timeUsedCheckComb: Long = 0
   var genPredicates = false
-  private var usePredicates: Seq[BooleanTerm] = Nil
-  def setToUsePredicates(pl: Seq[BooleanTerm]): Unit = {usePredicates = pl}
+  private var usePredicates: Seq[PredicateTerm] = Nil
+  def setToUsePredicates(pl: Seq[PredicateTerm]): Unit = {usePredicates = pl}
 
  //val solverPool = new ADT.WorkerPool(Array.fill[Solver](10)(new Solver(solverFromName("Z3"))))
   // -----------
@@ -95,8 +95,8 @@ object PredicatesAbstraction
     * @return BooleanExpression
     */
   def gammaCNF(absDomain: AbstractDomain,
-               predicates: Seq[BooleanTerm],
-               simplify: Boolean): BooleanTerm =
+               predicates: Seq[PredicateTerm],
+               simplify: Boolean): PredicateTerm =
   {
     if (absDomain.size == math.pow(2, predicates.length).toInt)
       False() // short cut for CNF
@@ -123,8 +123,8 @@ object PredicatesAbstraction
     * @return BooleanExpression
     */
   def gammaDNF(absDomain: AbstractDomain,
-               predicates: Seq[BooleanTerm],
-               simplify: Boolean): BooleanTerm =
+               predicates: Seq[PredicateTerm],
+               simplify: Boolean): PredicateTerm =
   {
     if (absDomain.size == math.pow(2, predicates.length).toInt)
       True() // short cut for DNF
@@ -175,7 +175,7 @@ object PredicatesAbstraction
     * @param predicates
     * @return
     */
-  def combinationToDisjunctTerm(combination: Int, predicates: Seq[BooleanTerm]): BooleanTerm =
+  def combinationToDisjunctTerm(combination: Int, predicates: Seq[PredicateTerm]): PredicateTerm =
   {
     val bin = binaryString(combination, predicates.length)
     val exprLs = for (i <- bin.indices) yield if (bin(i) == '1') predicates(i) else !predicates(i)
@@ -188,7 +188,7 @@ object PredicatesAbstraction
     * @param predicates
     * @return
     */
-  def combinationToConjunctTerm(combination: Int, predicates: Seq[BooleanTerm]): BooleanTerm =
+  def combinationToConjunctTerm(combination: Int, predicates: Seq[PredicateTerm]): PredicateTerm =
   {
     val bin = binaryString(combination, predicates.length)
     val exprLs = for (i <- bin.indices) yield if (bin(i) == '1') predicates(i) else !predicates(i)
@@ -201,11 +201,11 @@ object PredicatesAbstraction
     */
   trait TermComposer
   {
-    def combinationToTerm(combination: Int, predicates: Seq[BooleanTerm]): BooleanTerm
+    def combinationToTerm(combination: Int, predicates: Seq[PredicateTerm]): PredicateTerm
 
     def gamma(absDomain: AbstractDomain,
-              predicates: Seq[BooleanTerm],
-              simplify: Boolean): BooleanTerm
+              predicates: Seq[PredicateTerm],
+              simplify: Boolean): PredicateTerm
   }
 
   /**
@@ -214,11 +214,11 @@ object PredicatesAbstraction
   class DNFComposer extends TermComposer
   {
     def combinationToTerm(combination: Int,
-                          predicates: Seq[BooleanTerm]): BooleanTerm = combinationToConjunctTerm(combination, predicates)
+                          predicates: Seq[PredicateTerm]): PredicateTerm = combinationToConjunctTerm(combination, predicates)
 
     def gamma(absDomain: AbstractDomain,
-              predicates: Seq[BooleanTerm],
-              simplify: Boolean): BooleanTerm = gammaDNF(absDomain, predicates, simplify)
+              predicates: Seq[PredicateTerm],
+              simplify: Boolean): PredicateTerm = gammaDNF(absDomain, predicates, simplify)
   }
 
   /**
@@ -227,11 +227,11 @@ object PredicatesAbstraction
   class CNFComposer extends TermComposer
   {
     def combinationToTerm(combination: Int,
-                          predicates: Seq[BooleanTerm]): BooleanTerm = combinationToDisjunctTerm(combination, predicates)
+                          predicates: Seq[PredicateTerm]): PredicateTerm = combinationToDisjunctTerm(combination, predicates)
 
     def gamma(absDomain: AbstractDomain,
-              predicates: Seq[BooleanTerm],
-              simplify: Boolean): BooleanTerm = gammaCNF(absDomain, predicates, simplify)
+              predicates: Seq[PredicateTerm],
+              simplify: Boolean): PredicateTerm = gammaCNF(absDomain, predicates, simplify)
   }
 } // object PredicateAbstraction
 
@@ -251,9 +251,9 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
   val solverArray = Array.fill[SMTLIBInterpreter](traceAnalyzer.length)(new SMTLIBInterpreter(solverFromName("Z3")))
 
   ///////////////////////////////////////////////
-  lazy val tracePredicates:Seq[BooleanTerm] =
+  lazy val tracePredicates:Seq[PredicateTerm] =
   {
-    def equalTest(current:Seq[BooleanTerm], next:Seq[BooleanTerm]): Boolean =
+    def equalTest(current:Seq[PredicateTerm], next:Seq[PredicateTerm]): Boolean =
     {
       require(0 != current.length && 0 != next.length, "equalTest2 cannot check zero length")
       require(current.length == next.length, "equalTest2 current.length != next.Length")
@@ -303,21 +303,21 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
     * @param currentPredicates
     * @return Seq of BooleanTerm of assertion at each location on the trace.
     */
-  def computePredicates(currentPredicates:Seq[BooleanTerm]):Seq[BooleanTerm] =
+  def computePredicates(currentPredicates:Seq[PredicateTerm]):Seq[PredicateTerm] =
   {
     /**
       *
       * @param t
       * @return
       */
-    def predicatesForTransition(t:Transition):Seq[BooleanTerm] =
+    def predicatesForTransition(t:Transition):Seq[PredicateTerm] =
     {
       /**
         *
         * @param predicate
         * @return
         */
-      def inEffectOrPre(predicate:BooleanTerm):Boolean =
+      def inEffectOrPre(predicate:PredicateTerm):Boolean =
       {
         val indexedPredicate = predicate.indexedBy{ case SSymbol(x) => t.effect.lastIndexMap.getOrElse(x, 0)}
         val insideEffect = (indexedPredicate.typeDefs intersect t.effect.term.typeDefs).nonEmpty
@@ -338,7 +338,7 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
       * @param loc is location
       * @return union of posts at location loc
       */
-    def nextPredicateAtLocation(loc:Int):BooleanTerm =
+    def nextPredicateAtLocation(loc:Int):PredicateTerm =
     {
       ////////////////////////////////////////////
       /**
@@ -351,7 +351,7 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
         */
       def checkCombination(c:Int,
                            transition:TraceAnalyzer.Transition,
-                           usePredicates:Seq[BooleanTerm]):Boolean =
+                           usePredicates:Seq[PredicateTerm]):Boolean =
       {
         val pre = currentPredicates(transition.preconditionIndex)
         val indexedPre = pre.indexedBy { case _ => 0}

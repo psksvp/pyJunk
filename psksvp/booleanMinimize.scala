@@ -2,10 +2,10 @@ package psksvp
 
 import au.edu.mq.comp.smtlib.theories.{Core, IntegerArithmetics}
 
-case class BooleanMinimize(termCombinerFunc:List[List[BooleanTerm]] => BooleanTerm) extends IntegerArithmetics with Core
+case class BooleanMinimize(termCombinerFunc:List[List[PredicateTerm]] => PredicateTerm) extends IntegerArithmetics with Core
 {
   import psksvp.ADT.Cache
-  private val cache = Cache[(Seq[Int], Seq[BooleanTerm]), BooleanTerm]
+  private val cache = Cache[(Seq[Int], Seq[PredicateTerm]), PredicateTerm]
                       {
                         case (minTerms, predicates) => minimize(minTerms.toList,
                                                                 predicates.toList)
@@ -18,27 +18,27 @@ case class BooleanMinimize(termCombinerFunc:List[List[BooleanTerm]] => BooleanTe
   def cacheStatistic:(Long, Long) = cache.statistic
 
   /**
-    *
+    * minimize boolean combination by looking at cache
     * @param minTerms
     * @param predicates
     * @return
     */
   def apply(minTerms:List[Int],
-               predicates:List[BooleanTerm]):BooleanTerm = cache((minTerms, predicates))
+               predicates:List[PredicateTerm]):PredicateTerm = cache((minTerms, predicates))
 
   /**
-    *
+    * minimize boolean combination without looking at cache
     * @param minTerms
     * @param predicates
     * @return
     */
   def minimize(minTerms:List[Int],
-               predicates:List[BooleanTerm]):BooleanTerm =
+               predicates:List[PredicateTerm]):PredicateTerm =
   {
     // to understand the body of function minimize
     // look at function espresso for the comment about
     // espresso's input and out format (pla)
-    def toTerms(sl:String):Seq[BooleanTerm] =
+    def toTerms(sl:String):Seq[PredicateTerm] =
     {
       for(i <- predicates.indices if sl(i) != '-') yield
       {
@@ -147,7 +147,7 @@ case class BooleanMinimize(termCombinerFunc:List[List[BooleanTerm]] => BooleanTe
   */
 object BooleanMinimizeCNF extends BooleanMinimize(toCNF)
 {
-  override def apply(minTerms:List[Int], predicates:List[BooleanTerm]):BooleanTerm = super.apply(minTerms, predicates)
+  override def apply(minTerms:List[Int], predicates:List[PredicateTerm]):PredicateTerm = super.apply(minTerms, predicates)
 }
 
 /**
@@ -155,5 +155,5 @@ object BooleanMinimizeCNF extends BooleanMinimize(toCNF)
   */
 object BooleanMinimizeDNF extends BooleanMinimize(toDNF)
 {
-  override def apply(minTerms:List[Int], predicates:List[BooleanTerm]):BooleanTerm = super.apply(minTerms, predicates)
+  override def apply(minTerms:List[Int], predicates:List[PredicateTerm]):PredicateTerm = super.apply(minTerms, predicates)
 }

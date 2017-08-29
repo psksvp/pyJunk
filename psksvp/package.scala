@@ -24,7 +24,8 @@ package object psksvp
   object logics extends IntegerArithmetics with Core
   import logics._
 
-  type BooleanTerm = TypedTerm[BoolTerm, Term]
+  //type PredicateTerm = TypedTerm[BoolTerm, Term]
+  type PredicateTerm = TypedTerm[BoolTerm, Term]
   type AbstractDomain = Seq[Int]
 
   /**
@@ -32,7 +33,7 @@ package object psksvp
     * @param term
     * @return
     */
-  def satisfiableCheck(term : BooleanTerm)
+  def satisfiableCheck(term : PredicateTerm)
                       (implicit solver:SMTLIBInterpreter):SatResponses =
   {
     push()
@@ -51,7 +52,7 @@ package object psksvp
     * @param term
     * @return
     */
-  def validityCheck(term : BooleanTerm)
+  def validityCheck(term : PredicateTerm)
                    (implicit solver:SMTLIBInterpreter):Boolean = UnSat() == satisfiableCheck(!term)
 
 
@@ -61,18 +62,33 @@ package object psksvp
     * @param f2
     * @return
     */
-  def equivalence(f1:BooleanTerm, f2:BooleanTerm)
-                  (implicit solver:SMTLIBInterpreter):Boolean = validityCheck(f1 === f2)
+  def equivalence(f1:PredicateTerm, f2:PredicateTerm)
+                 (implicit solver:SMTLIBInterpreter):Boolean = validityCheck(f1 === f2)
 
+
+  /**
+    * check if predicate q contains predicate p
+    * @param predicate
+    * @param withSuperSet
+    * @param solver
+    * @return
+    */
+  def subsetCheck(predicate:PredicateTerm, withSuperSet:PredicateTerm)
+                 (implicit solver:SMTLIBInterpreter):Boolean = satisfiableCheck(predicate & !withSuperSet) match
+                                                            {
+                                                              case Sat()   => false
+                                                              case UnSat() => true
+                                                              case _       => false
+                                                            }
 
   /**
     *
     * @param p  precondition
     * @param e  effect
     * @param q  postcondition
-    * @return true of p is included in q
+    * @return true if p is included in q
     */
-  def checkPost(p:BooleanTerm, e:BooleanTerm, q:BooleanTerm)
+  def checkPost(p:PredicateTerm, e:PredicateTerm, q:PredicateTerm)
                (implicit solver:SMTLIBInterpreter):Boolean = satisfiableCheck(p & e & !q) match
                                                              {
                                                                case Sat()   => false
@@ -151,14 +167,14 @@ package object psksvp
     * @param s
     * @return
     */
-  def toCNF(s:List[List[BooleanTerm]]):BooleanTerm = s match
+  def toCNF(s:List[List[PredicateTerm]]):PredicateTerm = s match
   {
     case Nil       => sys.error("psksvp.CNF, Nil list was passed")
     case l :: Nil  => l.reduce(_ | _)
     case l :: rest => l.reduce(_ | _) & toCNF(rest)  // conjunct them
   }
 
-  def toDNF(s:List[List[BooleanTerm]]):BooleanTerm = s match
+  def toDNF(s:List[List[PredicateTerm]]):PredicateTerm = s match
   {
     case Nil       => sys.error("psksvp.CNF, Nil list was passed")
     case l :: Nil  => l.reduce(_ & _)
@@ -230,6 +246,9 @@ package object psksvp
     Seq("cp", path, s"$toDir/.").!!
   }
 
+  def fileExists(path:String):Boolean = new java.io.File(path).exists()
+
+
   def runWithTimeout[T](timeout:Duration, defaultReturn:T)(f: => T):T =
   {
     import scala.concurrent.{Await, Future}
@@ -243,5 +262,4 @@ package object psksvp
       case _:Throwable => defaultReturn
     }
   }
-
 }

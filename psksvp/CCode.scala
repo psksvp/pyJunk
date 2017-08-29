@@ -1,5 +1,7 @@
 package psksvp
 
+
+
 object CCode
 {
   val one =  """
@@ -239,4 +241,129 @@ object CCode
                 |  return 0;
                 |}
               """.stripMargin
+
+  val code13 =  """
+                |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                |int __VERIFIER_nondet_int();
+                |extern void __VERIFIER_assume(int);
+                |
+                |int main(int argc, char** arg)
+                |{
+                |  int n = __VERIFIER_nondet_int();
+                |  int x = 0;
+                |  int y = 0;
+                |  __VERIFIER_assume(n > 0);
+                |  while(x < n)
+                |  {
+                |      x++;
+                |      y++;
+                |  }
+                |
+                |  // if I take the below verify out, the predicate inferrer
+                |  // would not be able to extract the x and y relation which is
+                |  // x == y
+                |  if(x != y) __VERIFIER_error();
+                |
+                |  // just more verifies
+                |  if(x != n) __VERIFIER_error();
+                |  if(y != n) __VERIFIER_error();
+                |  return 0;
+                |}
+              """.stripMargin
+
+  val code14 =  """
+                |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                |unsigned int __VERIFIER_nondet_uint();
+                |
+                |int main()
+                |{
+                |  unsigned int n = __VERIFIER_nondet_uint();
+                |  int x = 1;
+                |  int a = 0;
+                |  while(x <= n)
+                |  {
+                |    a = a + 1;
+                |    if(a != x) __VERIFIER_error();
+                |    x = x + 1;
+                |  }
+                |  if(a != x - 1) __VERIFIER_error();
+                |  if(a != n) __VERIFIER_error();
+                |  if(x != n + 1) __VERIFIER_error();
+                |  return 0;
+                |}
+              """.stripMargin
+
+  val code15 =  """
+                |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                |unsigned int __VERIFIER_nondet_uint();
+                |extern void __VERIFIER_assume(int);
+                |
+                |int main(int argc, char** arg)
+                |{
+                |  unsigned int n = __VERIFIER_nondet_uint();
+                |  __VERIFIER_assume(n >= 1);
+                |  int x = 1;
+                |  int a = 0;
+                |  while(x <= n)
+                |  {
+                |    a = a + x;
+                |    if(a < x) __VERIFIER_error();
+                |    x = x + 1;
+                |  }
+                |  if(x != n + 1) __VERIFIER_error();
+                |  if(0 == a) __VERIFIER_error();
+                |  return 0;
+                |}
+              """.stripMargin
+
+  val code16 =  """
+                |// Source: Sumit Gulwani, Nebosja Jojic: "Program Verification as
+                |// Probabilistic Inference", POPL 2007.
+                |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+                |
+                |int main()
+                |{
+                |    int x = 0;
+                |    int y = 50;
+                |    while(x < 100)
+                |    {
+                |	     if (x < 50)
+                |	       x = x + 1;
+                |	     else
+                |      {
+                |	       x = x + 1;
+                |	       y = y + 1;
+                |	     }
+                |    }
+                |    if(y != 100) __VERIFIER_error();
+                |    return 0;
+                |}
+              """.stripMargin
+
+  import psksvp.SkinkExecutor.Code
+
+  val baseTest = List(Code(toFile(CCode.one), false, "clang-3.7", 20),
+                       Code(toFile(CCode.two), false, "clang-3.7", 20),
+                       Code(toFile(CCode.three), false, "clang-3.7", 20),
+                       Code(toFile(CCode.four), false, "clang-3.7", 20),
+                       Code(toFile(CCode.five), false, "clang-3.7", 20),
+                       Code(toFile(CCode.six), false, "clang-3.7", 20),
+                       Code(toFile(CCode.seven), false, "clang-3.7", 20),
+                       Code(toFile(CCode.eight), false, "clang-3.7", 20),
+                       Code(toFile(CCode.nine), false, "clang-3.7", 20),
+                       Code(toFile(CCode.ten), false, "clang-3.7", 20),
+                       Code(toFile(CCode.eleven), false, "clang-3.7", 20),
+                       Code(toFile(CCode.code12), false, "clang-3.7", 20),
+                       Code(toFile(CCode.code13), false, "clang-3.7", 20),
+                       //Code(toFile(CCode.code14), false, "clang-3.7", 20),
+                       Code(toFile(CCode.code15), false, "clang-3.7", 20),
+                       Code(toFile(CCode.code16), false, "clang-3.7", 20)
+                     )
+
+  import scala.concurrent.duration._
+  def runBaseTest(outputDir:String,
+                  timeout:Duration = 30.minutes):Unit=
+  {
+    SkinkExecutor.runBenchAndOutputReport(baseTest, timeout, outputDir)
+  }
 }

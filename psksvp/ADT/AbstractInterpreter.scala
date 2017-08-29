@@ -1,6 +1,6 @@
 package psksvp.ADT
 
-import psksvp.BooleanTerm
+import psksvp.PredicateTerm
 
 /**
   * Created by psksvp on 21/6/17.

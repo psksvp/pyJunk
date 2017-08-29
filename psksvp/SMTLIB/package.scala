@@ -18,7 +18,7 @@ package object SMTLIB
     solver.eval(Raw("(reset)"))
   }
 
-  def breakOrTerm(sortedQIds:Set[SortedQId], orTerm:OrTerm):Seq[BooleanTerm] =
+  def breakOrTerm(sortedQIds:Set[SortedQId], orTerm:OrTerm):Seq[PredicateTerm] =
   {
     val r = for(t <- orTerm.terms :+ orTerm.term) yield
             {

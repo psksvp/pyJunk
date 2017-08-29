@@ -5,6 +5,7 @@ import au.edu.mq.comp.smtlib.parser.Analysis
 import au.edu.mq.comp.smtlib.parser.SMTLIB2Syntax._
 import au.edu.mq.comp.smtlib.theories.BoolTerm
 import au.edu.mq.comp.smtlib.typedterms.{Commands, QuantifiedTerm, TypedTerm}
+import psksvp.ADT.FixedPoint
 
 import scala.util.{Failure, Success}
 
@@ -15,15 +16,17 @@ import scala.util.{Failure, Success}
 
 trait PredicatesFilter
 {
-  def apply(predicates:Set[BooleanTerm]):Set[BooleanTerm]
+  def apply(predicates:Set[PredicateTerm]):Set[PredicateTerm]
 }
+
+//type Filter = f:Set[PredicateTerm] => Set[PredicateTerm]
 
 
 trait PredicatesHarvester
 {
-  def inferredPredicates:Set[BooleanTerm]
+  def inferredPredicates:Set[PredicateTerm]
 
-  def inferredWithFilters(filters:Seq[PredicatesFilter]):Set[BooleanTerm] =
+  def inferredWithFilters(filters:Seq[PredicatesFilter]):Set[PredicateTerm] =
   {
     var p = inferredPredicates  // state change
     for(f <- filters)
@@ -54,7 +57,7 @@ class EQEPredicatesHarvester(traceAnalyzer:TraceAnalyzer,
   import scala.util.Success
 
   ///
-  def inferPredicates(blockNo:Int, pre:Option[BooleanTerm] = None):Seq[TypedTerm[BoolTerm, Term]] =
+  def inferPredicates(blockNo:Int, pre:Option[PredicateTerm] = None):Seq[TypedTerm[BoolTerm, Term]] =
   {
     val (blockEffect, lastIndex) = traceAnalyzer.function.traceBlockEffect(traceAnalyzer.trace,
                                                                            blockNo,
@@ -104,7 +107,7 @@ class EQEPredicatesHarvester(traceAnalyzer:TraceAnalyzer,
     }
   }
 
-  override def inferredPredicates: Set[BooleanTerm] =
+  override def inferredPredicates: Set[PredicateTerm] =
   {
     val r = for(block <- 0 until traceAnalyzer.length - 1) yield inferPredicates(block).toSet
     r.reduce(_ union _)
@@ -138,7 +141,7 @@ class InterpolantBasedHarvester(traceAnalyzer:TraceAnalyzer,
 {
   lazy val namedTerms = for((tt, n) <- traceAnalyzer.traceTerms.zipWithIndex) yield tt.named("P" + n)
 
-  override def inferredPredicates: Set[BooleanTerm] =
+  override def inferredPredicates: Set[PredicateTerm] =
   {
     println("namedTerms")
     println(psksvp.termAsInfix(namedTerms))
@@ -161,7 +164,7 @@ class InterpolantBasedHarvester(traceAnalyzer:TraceAnalyzer,
   */
 object BreakOrTerms extends PredicatesFilter
 {
-  override def apply(predicates:Set[BooleanTerm]):Set[BooleanTerm] =
+  override def apply(predicates:Set[PredicateTerm]):Set[PredicateTerm] =
   {
     val r = for(t <- predicates) yield
             {
@@ -180,9 +183,9 @@ object BreakOrTerms extends PredicatesFilter
   */
 object ReduceToEqualTerms extends PredicatesFilter
 {
-  override def apply(predicates:Set[BooleanTerm]):Set[BooleanTerm] =
+  override def apply(predicates:Set[PredicateTerm]):Set[PredicateTerm] =
   {
-    var rm:Set[BooleanTerm] = Set()
+    var rm:Set[PredicateTerm] = Set()
     val pairs = for(i <- predicates; j <- predicates if i != j) yield (i, j)
     val rt = for((t1, t2) <- pairs) yield
     {
@@ -202,5 +205,43 @@ object ReduceToEqualTerms extends PredicatesFilter
       }
     }
     rt.reduceLeft(_ union _) -- rm
+  }
+}
+
+object ReduceToSuperSetTerms extends PredicatesFilter
+{
+  private def subsetOf(predicate:PredicateTerm, fromSet:Set[PredicateTerm])
+                      (implicit solver:SMTLIBInterpreter):Set[PredicateTerm] =
+  {
+    for(p <- fromSet if !(p eq predicate) && subsetCheck(p, withSuperSet = predicate)) yield p
+  }
+
+  override def apply(predicates:Set[PredicateTerm]):Set[PredicateTerm] =
+  {
+    implicit val solver = new SMTLIBInterpreter(solverFromName("Z3"))
+
+    def test(a:Set[PredicateTerm], b:Set[PredicateTerm]) = a == b
+    def step(a:Set[PredicateTerm]):Set[PredicateTerm] =
+    {
+      if(a.isEmpty)
+        Set[PredicateTerm]()
+      else
+      {
+        //freaking state change for now.
+        var i = 0
+        var subset = Set[PredicateTerm]()
+        val totest = a.toIndexedSeq
+        while(i < a.size && subset.isEmpty)
+        {
+          subset = subsetOf(totest(i), fromSet = a)
+          i = i + 1
+        }
+        a -- subset
+      }
+    }
+
+    val r = FixedPoint(test, step).run(predicates)
+    solver.destroy()
+    r
   }
 }

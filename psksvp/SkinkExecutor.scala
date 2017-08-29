@@ -13,7 +13,7 @@ object SkinkExecutor
     * @param maxIteration
     */
   def consoleRun(filename:String,
-                 predicates:Seq[BooleanTerm],
+                 predicates:Seq[PredicateTerm],
                  useO2:Boolean,
                  usePredicateAbstraction:Boolean,
                  useClang:String = "clang-4.0",
@@ -49,45 +49,34 @@ object SkinkExecutor
     * @return
     */
   def run(filename:String,
-          predicates:Seq[BooleanTerm],
+          predicates:Seq[PredicateTerm],
           useO2:Boolean,
           usePredicateAbstraction:Boolean,
           useClang:String = "clang-4.0",
           maxIteration:Int = 20): RunResult=
   {
     import java.io.{PrintStream, File}
-    val outputFile = new File(filename + ".output.txt")
-    Console.withOut(new PrintStream(outputFile))
+    val outputPath = s"$filename.output.txt"
+    if(!fileExists(outputPath))
     {
-      consoleRun(filename, predicates, useO2, usePredicateAbstraction, useClang)
+      Console.withOut(new PrintStream(new File(outputPath)))
+      {
+        consoleRun(filename, predicates, useO2, usePredicateAbstraction, useClang)
+      }
     }
+    else
+      println(s"$outputPath exists, grabbing the result..")
+
     import sys.process._
-    val result = Seq("/usr/bin/tail", "-n", "1", filename + ".output.txt").!!
-    if(result.trim.indexOf("TRUE") >= 0) RunTRUE()
-    else if(result.trim.indexOf("FALSE") >= 0) RunFALSE()
-    else RunUNKNOWN()
-  }
+    val result = Seq("/usr/bin/tail", "-n", "1", outputPath).!!
 
-  /**
-    *
-    * @param filePaths
-    * @param useO2
-    * @param useClang
-    * @param usePredicateAbstraction
-    */
-  def runBunch(filePaths:Seq[String],
-               useO2:Boolean,
-               useClang:String,
-               usePredicateAbstraction:Boolean):Unit =
-  {
-    for(path <- filePaths)
-    {
-      print(s"running:$path")
-      val result = run(path, Nil, useO2, usePredicateAbstraction, useClang)
-      println(s"-----> $result")
-    }
+    if(result.trim.indexOf("TRUE") >= 0)
+      RunTRUE()
+    else if(result.trim.indexOf("FALSE") >= 0)
+      RunFALSE()
+    else
+      RunUNKNOWN()
   }
-
 
   /**
     *
@@ -110,15 +99,15 @@ object SkinkExecutor
     for(d <- runDataList) yield
     {
       println(s"running -> $d")
-      val result = runWithTimeout[RunResult](timeout, RunTIMEOUT())
-      {
-        run(d.filePath, Nil, d.useO2, true, d.useClang, d.maxIteration)
-      }
+//      val result = runWithTimeout[RunResult](timeout, RunTIMEOUT())
+//      {
+//        run(d.filePath, Nil, d.useO2, true, d.useClang, d.maxIteration)
+//      }
+
+      val result = run(d.filePath, Nil, d.useO2, true, d.useClang, d.maxIteration)
       copyFile(d.filePath, outputDir)
-      copyFile(d.filePath.replace(".c", ".ll"), outputDir)
       copyFile(s"${d.filePath}.output.txt", outputDir)
       Seq(d.filePath.split("/").last,
-          d.filePath.replace(".c", ".ll").split("/").last,
           s"${d.filePath}.output.txt".split("/").last,
           result.toString())
     }
@@ -152,11 +141,11 @@ object SkinkExecutor
   {
     def addRow(r:Seq[String]):String =
     {
-      require(4 == r.length)
+      require(3 == r.length)
       s"""
          |<tr>
-         |  <th> <a href="${r(0)}"> ${r(0)} </a> </th>
-         |  <th> <a href="${r(2)}"> ${r.last} </a> </th>
+         |  <th> <a href="${r.head}"> ${r.head} </a> </th>
+         |  <th> <a href="${r(1)}"> ${r.last} </a> </th>
          |</tr>
        """.stripMargin
     }

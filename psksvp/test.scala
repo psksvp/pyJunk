@@ -22,7 +22,34 @@ object test
     //test1()
     //test61()
     //test19()
-    testWithReport()
+    //testWithReport()
+    //testContains()
+    testReduceToSuperSet()
+  }
+
+  def testReduceToSuperSet():Unit =
+  {
+    val i = Ints("i")
+    val j = Ints("j")
+    val a:Set[PredicateTerm] = Set(i > 0, i > 1, j > -10, j > 0, j > -50 | i > -50)
+    val r = psksvp.ReduceToSuperSetTerms(a)
+    println(termAsInfix(r.toSeq))
+  }
+
+  def testContains():Unit=
+  {
+    val i = Ints("i")
+    val j = Ints("j")
+    val p1 = i >= 10
+    val p2 = i >= 5
+    val p3 = j > 0 & i >= 0
+
+    val solver = new SMTLIBInterpreter(solverFromName("Z3"))
+    println(subsetCheck(p1, p2)(solver))
+    println(subsetCheck(p2, p1)(solver))
+    println(subsetCheck(p1, p3)(solver))
+    println(subsetCheck(p3, p1)(solver))
+    solver.destroy()
   }
 
   def testEspresso():Unit=
@@ -50,28 +77,52 @@ object test
   def testWithReport():Unit=
   {
     import psksvp.SkinkExecutor.Code
-    val baseDir = ""
-    val data = List(Code(baseDir + "/c/loop-acceleration/diamond_true-unreach-call1.c", false, "clang-3.7", 30),
-                    Code(baseDir + "/c/loop-acceleration/diamond_true-unreach-call2.c", false, "clang-3.7", 60),
-                    Code(baseDir + "/c/loop-acceleration/functions_true-unreach-call1.c", false, "clang-3.7", 30),
-                    Code(baseDir + "/c/loop-acceleration/nested_true-unreach-call1.c", false, "clang-3.7", 30),
-                    Code(baseDir + "/c/loop-acceleration/overflow_true-unreach-call1.c", false, "clang-3.7", 30))
+    val baseDir = "/home/psksvp/workspace/sv-bench"
+    val loopAcc = List(Code(baseDir + "/c/loop-acceleration/const_true-unreach-call1.c", false, "clang-3.7", 20),
+                     Code(baseDir + "/c/loop-acceleration/diamond_true-unreach-call1.c", false, "clang-3.7", 20),
+                    //Code(baseDir + "/c/loop-acceleration/diamond_true-unreach-call2.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-acceleration/functions_true-unreach-call1.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/nested_true-unreach-call1.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/overflow_true-unreach-call1.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/multivar_true-unreach-call1.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/phases_true-unreach-call1.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/phases_true-unreach-call2.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/simple_true-unreach-call1.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/simple_true-unreach-call2.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/simple_true-unreach-call3.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/simple_true-unreach-call4.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/underapprox_true-unreach-call1.c", false, "clang-3.7", 20),
+                    Code(baseDir + "/c/loop-acceleration/underapprox_true-unreach-call2.c", false, "clang-3.7", 20))
 
-    val baseTest = List(Code(toFile(CCode.one), false, "clang-3.7", 30),
-                        Code(toFile(CCode.two), false, "clang-3.7", 30),
-                        Code(toFile(CCode.three), false, "clang-3.7", 30),
-                        Code(toFile(CCode.four), false, "clang-3.7", 30),
-                        Code(toFile(CCode.five), false, "clang-3.7", 30),
-                        Code(toFile(CCode.six), false, "clang-3.7", 30),
-                        Code(toFile(CCode.seven), false, "clang-3.7", 30)
-                       )
+    val loopLit = List(Code(baseDir + "/c/loop-lit/afnp2014_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/bhmr2007_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/cggmp2005_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/cggmp2005b_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/css2003_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/ddlm2013_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/gj2007_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/gj2007b_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/gr2006_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/gsv2008_true-unreach-call.c", false, "clang-3.7", 10),
+                    Code(baseDir + "/c/loop-lit/ghhk2008_true-unreach-call.c", false, "clang-3.7", 10)
+                   )
+
+    val loopLitO2 = List(Code(baseDir + "/c/loop-lit/afnp2014_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/bhmr2007_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/cggmp2005_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/cggmp2005b_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/css2003_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/ddlm2013_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/gj2007_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/gj2007b_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/gr2006_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/gsv2008_true-unreach-call.c", true, "clang-4.0", 10),
+                        Code(baseDir + "/c/loop-lit/hhk2008_true-unreach-call.c", false, "clang-3.7", 10)
+                      )
 
     import scala.concurrent.duration._
-    SkinkExecutor.runBenchAndOutputReport(baseTest, 30.minutes, "/home/psksvp/workspace/output")
+    SkinkExecutor.runBenchAndOutputReport(loopLitO2, 120.minutes, "/home/psksvp/workspace/output")
   }
-
-
-
 
   def testBunchEasy():Unit =
   {
@@ -124,8 +175,6 @@ object test
                      "/home/psksvp/workspace/svcomp/c/loops/sum04_true-unreach-call_true-termination.c",
                      "/home/psksvp/workspace/svcomp/c/loops/trex01_true-unreach-call.c")
                      //"/home/psksvp/workspace/svcomp/c/loops/trex02_false-unreach-call_true-termination.c")
-
-    SkinkExecutor.runBunch(files, true, "clang-4.0", usePredicateAbstraction=true)
   }
 
 
@@ -880,7 +929,7 @@ object test
                   |}
                 """.stripMargin
 
-    def implies(a:BooleanTerm, b:BooleanTerm):BooleanTerm = !a | b
+    def implies(a:PredicateTerm, b:PredicateTerm):PredicateTerm = !a | b
 
     SkinkExecutor.consoleRun(toFile(code),
               Nil,//List(m === x, x < n, n <= 0, m >= 0, m < n),
@@ -1247,5 +1296,45 @@ object test
               useO2 = true,
               usePredicateAbstraction = true,
               useClang = "clang-4.0")
+  }
+
+  def test20(): Unit =
+  {
+    val code =
+      """
+        |extern void __VERIFIER_error() __attribute__ ((__noreturn__));
+        |extern unsigned int __VERIFIER_nondet_uint();
+        |
+        |int main() {
+        |  int n;
+        |  int k = 0;
+        |  int i = 0;
+        |  n = __VERIFIER_nondet_int();
+        |  while( i < n ) {
+        |      i++;
+        |      k++;
+        |  }
+        |  int j = n;
+        |  while( j > 0 ) {
+        |      //__VERIFIER_assert(k > 0);
+        |      if(!(k > 0)) __VERIFIER_error();
+        |      j--;
+        |      k--;
+        |  }
+        |  return 0;
+        |}
+        |
+      """.stripMargin
+
+    val n = Ints("%n")
+    val k = Ints("%k")
+    val i = Ints("%i")
+    val j = Ints("%j")
+
+    SkinkExecutor.consoleRun(toFile(code),
+                              Nil, //List(n >= 0, i === 0, k === 0, i < n, i > 0, k <= 0, j === n, j < n, k === i, i === n),
+                              useO2 = true,
+                              usePredicateAbstraction = true,
+                              useClang = "clang-4.0")
   }
 }

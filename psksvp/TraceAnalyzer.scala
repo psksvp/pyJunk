@@ -34,7 +34,7 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
 
   lazy val length:Int = choices.length
   lazy val trace:Trace = Trace(choices)
-  lazy val traceTerms:Seq[BooleanTerm] = function.traceToTerms(trace)
+  lazy val traceTerms:Seq[PredicateTerm] = function.traceToTerms(trace)
   //////////////////////////////////////////////////
   // compute repetitionsPairs
   //////////////////////////////////////////////////
@@ -97,7 +97,7 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
   }
 
   //////////////////////////////////////////////////
-  def automatonWithBackEdges(tracePredicates:Seq[BooleanTerm])
+  def automatonWithBackEdges(tracePredicates:Seq[PredicateTerm])
                             (implicit solver:SMTLIBInterpreter):NFA[Int, Int] =
   {
     //////////////////////////////////////////
@@ -157,7 +157,7 @@ case class TraceAnalyzer(function:IRFunction, choices:Seq[Int]) extends Commands
 
 object TraceAnalyzer
 {
-  case class BlockEffect(term:BooleanTerm, lastIndexMap:Map[String, Int])
+  case class BlockEffect(term:PredicateTerm, lastIndexMap:Map[String, Int])
 
   /**
     *
