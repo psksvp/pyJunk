@@ -14,7 +14,8 @@ import au.edu.mq.comp.smtlib.interpreters.Resources
 import psksvp.ADT.{AutoDispose, Disposable}
 import psksvp.TraceAnalyzer.Transition
 
-import scala.collection.parallel.immutable.ParVector
+
+
 
 
 /**
@@ -78,160 +79,14 @@ object PredicatesAbstraction
         genPredicates = true
       }
 
-      println(s"running with input predicates: ${usePredicates.length}")
+      println(s"running with predicates: ${usePredicates.length}")
       println(termAsInfix(usePredicates))
-      val p = PredicatesAbstraction(traceAnalyzer, usePredicates, new CNFComposer)
+      val p = PredicatesAbstraction(traceAnalyzer, usePredicates, CNFComposer)
       val result = p.automaton
       p.dispose()
       //solverPool.shutdown()
       result
     }
-  }
-
-  /**
-    * combine boolean vectors (disjunct clauses) to a conjunct
-    *
-    * @param absDomain
-    * @return BooleanExpression
-    */
-  def gammaCNF(absDomain: AbstractDomain,
-               predicates: Seq[PredicateTerm],
-               simplify: Boolean): PredicateTerm =
-  {
-    if (absDomain.size == math.pow(2, predicates.length).toInt)
-      False() // short cut for CNF
-    else if (absDomain.isEmpty)
-      True() // short cut  for CNF
-    else
-    {
-      if (!simplify)
-      {
-        val exprLs =for (i <- absDomain.indices) yield combinationToDisjunctTerm(absDomain(i), predicates)
-        exprLs.par.reduce(_ & _)
-      }
-      else
-      {
-        BooleanMinimizeCNF(absDomain.toList, predicates.toList)
-      }
-    }
-  }
-
-  /**
-    * combine boolean vectors (conjunct clauses) to a disjunct term
-    *
-    * @param absDomain
-    * @return BooleanExpression
-    */
-  def gammaDNF(absDomain: AbstractDomain,
-               predicates: Seq[PredicateTerm],
-               simplify: Boolean): PredicateTerm =
-  {
-    if (absDomain.size == math.pow(2, predicates.length).toInt)
-      True() // short cut for DNF
-    else if (absDomain.isEmpty)
-      False() // short cut  for DNF
-    else
-    {
-      if (!simplify)
-      {
-        val exprLs = for (i <- absDomain.indices) yield combinationToConjunctTerm(absDomain(i), predicates)
-        exprLs.reduce(_ | _) // DNF
-      }
-      else
-      {
-        BooleanMinimizeDNF(absDomain.toList, predicates.toList)
-      }
-    }
-  }
-
-//  def alpha(pre:BooleanTerm, effect:BooleanTerm, inputPredicates:Seq[BooleanTerm]):AbstractDomain =
-//  {
-//    def checkCombination(c:Int):Boolean =
-//    {
-//      val solver = solverPool.getWorker()
-//      val term = combinationToDisjunctTerm(c, inputPredicates)
-//      val r = checkPost(pre, effect, term)(solver)
-//      solverPool.releaseWorker(solver)
-//      r
-//    }
-//
-//    val combinationSize = Math.pow(2, usePredicates.length).toInt
-//    val absDomain = for(c <- ParVector.range(0, combinationSize) if checkCombination(c)) yield c
-//    absDomain.toIndexedSeq
-//  }
-//
-//  def computeAbstractPost(pre:BooleanTerm,
-//                          effect:BooleanTerm,
-//                          inputPredicates:Seq[BooleanTerm]):BooleanTerm =
-//  {
-//    val absDom = alpha(pre, effect, inputPredicates)
-//    gammaCNF(absDom, inputPredicates, simplify = true)
-//  }
-
-
-  /**
-    *
-    * @param combination
-    * @param predicates
-    * @return
-    */
-  def combinationToDisjunctTerm(combination: Int, predicates: Seq[PredicateTerm]): PredicateTerm =
-  {
-    val bin = binaryString(combination, predicates.length)
-    val exprLs = for (i <- bin.indices) yield if (bin(i) == '1') predicates(i) else !predicates(i)
-    exprLs.reduce(_ | _)
-  }
-
-  /**
-    *
-    * @param combination
-    * @param predicates
-    * @return
-    */
-  def combinationToConjunctTerm(combination: Int, predicates: Seq[PredicateTerm]): PredicateTerm =
-  {
-    val bin = binaryString(combination, predicates.length)
-    val exprLs = for (i <- bin.indices) yield if (bin(i) == '1') predicates(i) else !predicates(i)
-    exprLs.reduce(_ & _)
-  }
-
-
-  /**
-    *
-    */
-  trait TermComposer
-  {
-    def combinationToTerm(combination: Int, predicates: Seq[PredicateTerm]): PredicateTerm
-
-    def gamma(absDomain: AbstractDomain,
-              predicates: Seq[PredicateTerm],
-              simplify: Boolean): PredicateTerm
-  }
-
-  /**
-    *
-    */
-  class DNFComposer extends TermComposer
-  {
-    def combinationToTerm(combination: Int,
-                          predicates: Seq[PredicateTerm]): PredicateTerm = combinationToConjunctTerm(combination, predicates)
-
-    def gamma(absDomain: AbstractDomain,
-              predicates: Seq[PredicateTerm],
-              simplify: Boolean): PredicateTerm = gammaDNF(absDomain, predicates, simplify)
-  }
-
-  /**
-    *
-    */
-  class CNFComposer extends TermComposer
-  {
-    def combinationToTerm(combination: Int,
-                          predicates: Seq[PredicateTerm]): PredicateTerm = combinationToDisjunctTerm(combination, predicates)
-
-    def gamma(absDomain: AbstractDomain,
-              predicates: Seq[PredicateTerm],
-              simplify: Boolean): PredicateTerm = gammaCNF(absDomain, predicates, simplify)
   }
 } // object PredicateAbstraction
 
@@ -243,9 +98,9 @@ object PredicatesAbstraction
   */
 case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
                                   inputPredicates:Seq[TypedTerm[BoolTerm, Term]],
-                                  termComposer:PredicatesAbstraction.TermComposer) extends Commands
-                                                                                      with Resources
-                                                                                      with Disposable
+                                  termComposer:TermComposer) extends Commands
+                                                             with Resources
+                                                             with Disposable
 {
   import scala.collection.parallel.immutable.ParVector
   val solverArray = Array.fill[SMTLIBInterpreter](traceAnalyzer.length)(new SMTLIBInterpreter(solverFromName("Z3")))
@@ -255,8 +110,8 @@ case class PredicatesAbstraction(traceAnalyzer: TraceAnalyzer,
   {
     def equalTest(current:Seq[PredicateTerm], next:Seq[PredicateTerm]): Boolean =
     {
-      require(0 != current.length && 0 != next.length, "equalTest2 cannot check zero length")
-      require(current.length == next.length, "equalTest2 current.length != next.Length")
+      require(0 != current.length && 0 != next.length, "equalTest cannot check zero length")
+      require(current.length == next.length, "equalTest current.length != next.Length")
 
       val r = ParVector.range(0, current.length).map
               {

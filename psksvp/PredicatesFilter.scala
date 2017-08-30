@@ -73,10 +73,10 @@ object PredicatesFilter
         Set[PredicateTerm]()
       else
       {
-        def subsetOf(predicate:PredicateTerm, fromSet:Set[PredicateTerm])
+        def subsetOf(predicate:PredicateTerm, inSet:Set[PredicateTerm])
                     (implicit solver:SMTLIBInterpreter):Set[PredicateTerm] =
         {
-          for(p <- fromSet if !(p eq predicate) && subsetCheck(p, withSuperSet = predicate)) yield p
+          for(p <- inSet if !(p eq predicate) && subsetCheck(p, withSuperSet = predicate)) yield p
         }
 
         def forward(ls:Set[PredicateTerm]):Set[PredicateTerm]=   //freaking state change for now.
@@ -85,10 +85,11 @@ object PredicatesFilter
             Set[PredicateTerm]()                                 //val totest = a.toIndexedSeq
           else                                                   //while(i < a.size && subset.isEmpty)
           {                                                      //{
-            val ss = subsetOf(ls.head, fromSet=a)                //   subset = subsetOf(totest(i), fromSet = a)
+            val ss = subsetOf(ls.head, inSet=a)                  //   subset = subsetOf(totest(i), inSet = a)
             if(ss.isEmpty) forward(ls.tail) else ss              //   i = i + 1
           }                                                      //}
         }
+
         val subset = forward(a)
         a -- subset
       }

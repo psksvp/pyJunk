@@ -15,7 +15,7 @@ import scala.util.{Success, Failure}
 /**
   * Created by psksvp on 9/5/17.
   */
-object test
+object StratchPad
 {
   def main(args: Array[String]): Unit =
   {
