@@ -65,27 +65,31 @@ object PredicatesFilter
     import psksvp.ADT.FixedPoint
     implicit val solver = new SMTLIBInterpreter(solverFromName("Z3"))
 
-    def subsetOf(predicate:PredicateTerm, fromSet:Set[PredicateTerm])
-                (implicit solver:SMTLIBInterpreter):Set[PredicateTerm] =
-    {
-      for(p <- fromSet if !(p eq predicate) && subsetCheck(p, withSuperSet = predicate)) yield p
-    }
     def test(a:Set[PredicateTerm], b:Set[PredicateTerm]) = a == b
+
     def step(a:Set[PredicateTerm]):Set[PredicateTerm] =
     {
       if(a.isEmpty)
         Set[PredicateTerm]()
       else
       {
-        //freaking state change for now.
-        var i = 0
-        var subset = Set[PredicateTerm]()
-        val totest = a.toIndexedSeq
-        while(i < a.size && subset.isEmpty)
+        def subsetOf(predicate:PredicateTerm, fromSet:Set[PredicateTerm])
+                    (implicit solver:SMTLIBInterpreter):Set[PredicateTerm] =
         {
-          subset = subsetOf(totest(i), fromSet = a)
-          i = i + 1
+          for(p <- fromSet if !(p eq predicate) && subsetCheck(p, withSuperSet = predicate)) yield p
         }
+
+        def forward(ls:Set[PredicateTerm]):Set[PredicateTerm]=   //freaking state change for now.
+        {                                                        //var i = 0
+          if(ls.isEmpty)                                         //var subset = Set[PredicateTerm]()
+            Set[PredicateTerm]()                                 //val totest = a.toIndexedSeq
+          else                                                   //while(i < a.size && subset.isEmpty)
+          {                                                      //{
+            val ss = subsetOf(ls.head, fromSet=a)                //   subset = subsetOf(totest(i), fromSet = a)
+            if(ss.isEmpty) forward(ls.tail) else ss              //   i = i + 1
+          }                                                      //}
+        }
+        val subset = forward(a)
         a -- subset
       }
     }
